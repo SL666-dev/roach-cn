@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>蟑螂</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#efe8dc;touch-action:none;-webkit-user-select:none;user-select:none}
+iframe{display:block;width:100%;height:100%;border:0;background:#efe8dc}
+#gameFrame{position:fixed;inset:0;z-index:1;transition:opacity .14s linear}
+#gameFrame.covered{opacity:0;pointer-events:none}
+#labLayer{position:fixed;inset:0;z-index:20;background:#efe8dc;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .22s ease-out,visibility 0s linear .22s}
+#labLayer.open{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .22s ease-out}
+#labFrame{position:absolute;inset:0}
+#labBack{position:absolute;z-index:3;left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));min-width:44px;height:44px;padding:0 15px;border:0;border-radius:999px;background:rgba(248,240,220,.94);color:#302017;font:900 13px/1 system-ui,"PingFang SC","Microsoft YaHei",sans-serif;box-shadow:0 2px 0 rgba(114,76,43,.7),0 7px 20px rgba(0,0,0,.3);-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#labBack:active{transform:translateY(2px)}
+#boot{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:#efe8dc;transition:opacity .25s;pointer-events:none}
+#boot.done{opacity:0}
+#boot::after{content:"";width:28px;height:28px;border:3px solid rgba(48,32,23,.15);border-top-color:rgba(48,32,23,.8);border-radius:50%;animation:spin .75s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#error{position:fixed;z-index:50;inset:auto 16px calc(18px + env(safe-area-inset-bottom));display:none;padding:12px 15px;border-radius:14px;background:rgba(83,25,18,.94);color:#f8f0dc;font:700 13px/1.5 system-ui,"PingFang SC","Microsoft YaHei",sans-serif;text-align:center}
+#error.show{display:block}
+</style>
+</head>
+<body>
+<iframe id="gameFrame" title="蟑螂游戏" allow="autoplay"></iframe>
+<div id="labLayer" aria-hidden="true">
+  <iframe id="labFrame" title="捕获的蟑螂" allow="autoplay"></iframe>
+  <button id="labBack" type="button" aria-label="返回游戏">返回</button>
+</div>
+
+<!-- ───────── 인트로 · 蟑螂来信 ───────── -->
+<style>
+#intro{position:fixed;inset:0;z-index:45;display:grid;place-items:center;padding:24px 22px calc(24px + env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 35%,#ffffff 0%,#e6f1ee 70%,#d3e6e0 100%);transition:opacity .35s}
+#intro.gone{opacity:0;pointer-events:none}
+#intro .box{width:min(100%,560px);text-align:center;font:500 clamp(15.5px,4.3vw,19px)/1.8 "Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:#17372f;word-break:normal}
+#intro .tag{display:inline-block;margin-bottom:22px;padding:6px 14px;border-radius:999px;background:#0f7a63;color:#fff;font-size:13px;font-weight:800;letter-spacing:.14em}
+#intro p{margin:0 0 14px;opacity:0;transform:translateY(10px);transition:opacity .7s,transform .7s}
+#intro p.on{opacity:1;transform:none}
+#intro p b{color:#0f7a63;font-weight:800}
+#introGo{margin-top:22px;width:100%;max-width:340px;height:56px;border:0;border-radius:16px;background:#0f7a63;color:#fff;font:800 18px/1 "Noto Sans SC","PingFang SC",system-ui,sans-serif;box-shadow:0 3px 0 #0a5646,0 10px 24px rgba(15,122,99,.3);opacity:0;transition:opacity .6s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#introGo.on{opacity:1}
+#introGo:active{transform:translateY(3px);box-shadow:0 0 0 #0a5646}
+
+#mail{position:fixed;inset:0;z-index:60;display:none;place-items:center;padding:20px;background:rgba(255,236,190,.5);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+#mail.show{display:grid}
+#mail.closing{animation:mailOut .28s ease-in forwards}
+@keyframes mailOut{to{opacity:0}}
+#mail .env{position:absolute;left:50%;top:50%;width:210px;height:136px;margin:-68px 0 0 -105px;border-radius:10px;background:#f7d774;box-shadow:0 10px 26px rgba(120,80,10,.35);animation:envIn .45s cubic-bezier(.3,1.5,.5,1) both}
+#mail .env::before{content:"";position:absolute;left:0;right:0;top:0;height:86px;background:#f2c94c;clip-path:polygon(0 0,100% 0,50% 100%)}
+#mail .env::after{content:"";position:absolute;left:50%;top:70px;width:30px;height:30px;margin-left:-15px;border-radius:50%;background:#e2533e;box-shadow:inset 0 -3px 0 #b93a28}
+@keyframes envIn{0%{transform:translateY(-110vh) rotate(-14deg)}100%{transform:none}}
+#mail.open .env{animation:envAway .3s ease-in forwards}
+@keyframes envAway{to{transform:translateY(50vh) scale(.8);opacity:0}}
+#mail .card{position:relative;width:min(100%,380px);border-radius:22px;background:
+  radial-gradient(circle at 12px 12px,rgba(255,170,150,.3) 3.2px,transparent 3.6px) 0 0/34px 34px,
+  radial-gradient(circle at 29px 29px,rgba(120,190,230,.26) 2.6px,transparent 3px) 0 0/34px 34px,#fffaf0;
+  box-shadow:0 0 0 6px #fff,0 0 0 9px var(--lc,#8fd1b8),0 18px 40px rgba(110,70,20,.35);padding:20px 22px 18px;opacity:0;transform:translateY(34px) scale(.94)}
+#mail.open .card{animation:cardIn .4s .08s cubic-bezier(.25,1.4,.5,1) forwards}
+@keyframes cardIn{to{opacity:1;transform:none}}
+#mail .top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+#mail .ttl{padding:5px 12px;border-radius:999px;background:var(--lc,#8fd1b8);color:#fff;font:800 13px/1.2 "Noto Sans SC",system-ui,sans-serif;letter-spacing:.02em}
+#mail .stamp{flex:none;width:58px;height:73px;margin:-4px -4px 0 0;transform:rotate(6deg);filter:drop-shadow(0 2px 3px rgba(0,0,0,.2))}
+#mail .stamp svg{display:block;width:100%;height:100%}
+#mail .body{margin:10px 0 6px;font:700 25px/40px "KaiTi","PingFang SC",cursive;color:#4a3320;word-break:normal;letter-spacing:-.02em;background:repeating-linear-gradient(transparent 0 39px,rgba(200,150,90,.38) 39px 40px)}
+#mail .body div{min-height:40px}
+#mail .from{text-align:right;font:700 23px/1.4 "KaiTi","PingFang SC",cursive;color:#7a4a1c}
+#mail .fact{position:relative;margin-top:14px;padding:16px 14px 12px;border-radius:14px;background:#fff;border:2px dashed #7fb6e6;font:700 15px/1.55 "Noto Sans SC","PingFang SC",system-ui,sans-serif;color:#23456b;word-break:normal;white-space:pre-line}
+#mail .fact[hidden]{display:none}
+#mail .fact-tag{position:absolute;left:12px;top:-13px;padding:4px 11px 5px;border-radius:999px;background:#ff8a3d;color:#fff;font:900 14px/1 "Noto Sans SC",system-ui,sans-serif;box-shadow:0 2px 0 #d8661c;transform:rotate(-4deg)}
+#mailOk{display:block;width:100%;height:50px;margin-top:14px;border:0;border-radius:999px;background:#f7a93b;color:#fff;font:800 17px/1 "Noto Sans SC","PingFang SC",system-ui,sans-serif;box-shadow:0 4px 0 #cf7f16;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#mailOk:active{transform:translateY(4px);box-shadow:0 0 0 #cf7f16}
+</style>
+
+<div id="intro" hidden>
+  <div class="box">
+    <div class="tag">认知行为训练</div>
+    <p>这个模拟体验，<br>是为那些因<b>害怕蟑螂</b><br>而困扰的人准备的。</p>
+    <p>你是否也曾看见蟑螂，<br>却迟迟不敢动手？</p>
+    <p>反复接触、亲自尝试应对，<br>有助于减轻恐惧。</p>
+    <p>现在，就在安全的模拟环境中，<br>练习面对蟑螂吧。</p>
+    <button id="introGo" type="button">开始</button>
+  </div>
+</div>
+
+<div id="mail" aria-hidden="true">
+  <div class="env"></div>
+  <div class="card" role="dialog" aria-label="蟑螂来信">
+    <div class="top">
+      <div class="ttl">蟑螂来信</div>
+      <div class="stamp"><svg viewBox="0 0 62 78" aria-hidden="true">
+        <defs>
+          <mask id="mailPerf"><rect width="62" height="78" fill="#fff"/><g fill="#000" id="mailPerfDots"></g></mask>
+          <radialGradient id="mailWing" cx=".42" cy=".3" r=".8"><stop offset="0" stop-color="#c98a4b"/><stop offset=".55" stop-color="#8a4a1e"/><stop offset="1" stop-color="#4a220b"/></radialGradient>
+          <radialGradient id="mailPro" cx=".45" cy=".35" r=".75"><stop offset="0" stop-color="#e2b77c"/><stop offset="1" stop-color="#9a6630"/></radialGradient>
+          <linearGradient id="mailSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--lc,#8fd1b8)"/><stop offset="1" stop-color="#fff6d8"/></linearGradient>
+        </defs>
+        <g mask="url(#mailPerf)">
+          <rect width="62" height="78" fill="#fff"/>
+          <rect x="5" y="5" width="52" height="68" fill="url(#mailSky)"/>
+          <circle cx="46" cy="16" r="6" fill="#ffd45a"/>
+          <rect x="5" y="58" width="52" height="15" fill="#d9a766"/>
+        </g>
+        <g transform="translate(31 38)">
+          <ellipse cx="1.5" cy="3" rx="10" ry="19" fill="#000" opacity=".18"/>
+          <g stroke="#2b1406" stroke-width="1.1" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M-2 -17 C-6 -24 -11 -27 -18 -30"/><path d="M2 -17 C6 -24 11 -27 18 -30"/>
+            <path d="M-6 -8 L-12 -11 L-16 -17"/><path d="M6 -8 L12 -11 L16 -17"/>
+            <path d="M-7 -2 L-14 1 L-19 6"/><path d="M7 -2 L14 1 L19 6"/>
+            <path d="M-6 3 L-13 10 L-17 21"/><path d="M6 3 L13 10 L17 21"/>
+          </g>
+          <path d="M0 -8 C8 -8 9 2 8 10 C7 18 3 22 0 22 C-3 22 -7 18 -8 10 C-9 2 -8 -8 0 -8 Z" fill="url(#mailWing)"/>
+          <path d="M0 -7 C-1 4 -1 14 0 22" stroke="#3a1a06" stroke-width=".8" fill="none"/>
+          <path d="M-4 -4 C-6 4 -5 12 -3 18" stroke="#f0c48a" stroke-width="1.1" fill="none" opacity=".45" stroke-linecap="round"/>
+          <path d="M0 -17 C6 -17 9 -13 9 -9 C9 -7 5 -6 0 -6 C-5 -6 -9 -7 -9 -9 C-9 -13 -6 -17 0 -17 Z" fill="url(#mailPro)"/>
+          <path d="M-2.4 -15.5 C-3 -12 -3 -9 -2.2 -7 M2.4 -15.5 C3 -12 3 -9 2.2 -7" stroke="#3a1a06" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+          <ellipse cx="0" cy="-18" rx="2.8" ry="2" fill="#5a2d10"/>
+        </g>
+      </svg></div>
+    </div>
+    <div class="body" id="mailBody"></div>
+    <div class="from">蟑螂 留</div>
+    <div class="fact" id="mailFact" hidden><span class="fact-tag">冷知识！</span><span id="mailFactText"></span></div>
+    <button id="mailOk" type="button">知道了</button>
+  </div>
+</div>
+
+<div id="boot" aria-hidden="true"></div>
+<div id="error" role="alert"></div>
+
+<script src="local-pages.js"></script>
+<script>
+(function(){
+"use strict";
+// 镊子 모델은 반드시 게임 창의 three.js로 만들어야 한다.
+// 이 창에서 따로 불러온 three.js로 만든 도형은 게임 렌더러가 읽지 못해 매 프레임 렌더 에러가 나고 화면이 멈춘다.
+let THREE=null;
+
+const gameFrame=document.getElementById('gameFrame');
+const labLayer=document.getElementById('labLayer');
+const labFrame=document.getElementById('labFrame');
+const labBack=document.getElementById('labBack');
+const boot=document.getElementById('boot');
+const errorEl=document.getElementById('error');
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const ease=t=>t*t*(3-2*t);
+
+let gameWindow=null;
+let G=null;
+let GSFX=null;
+let installed=false;
+let labOpen=false;
+let labState='none';        // none → loading → ready
+let labPendingOpen=false;
+let pausedBeforeLab=false;
+let tweezerRig=null;
+let lastPointer=null;
+let closeBusy=false;
+let cap=null;               // 집어 드는 중인 바퀴
+
+const showError=text=>{
+  errorEl.textContent=text;
+  errorEl.classList.add('show');
+};
+
+function forwardedGameUrl(){
+  const q=new URLSearchParams(location.search);
+  q.delete('lab');
+  const query=q.toString();
+  return `game.html${query?`?${query}`:''}${location.hash||''}`;
+}
+
+function loadPage(frame, url){
+  if(location.protocol!=='file:'){
+    frame.src=url;
+    return;
+  }
+  const target=new URL(url,location.href);
+  const name=target.pathname.split('/').pop();
+  const html=window.ROACH_LOCAL_PAGES?.[name];
+  if(!html){showError('本地资源缺失，请保留 local-pages.js 和 vendor 文件夹。');return;}
+  const base=document.createElement('base');
+  base.href=new URL('.',location.href).href;
+  const setup='<script>window.__ROACH_SEARCH='+JSON.stringify(target.search)+';<\/script>';
+  frame.srcdoc=html.replace('<head>','<head>'+base.outerHTML+setup);
+}
+loadPage(gameFrame,forwardedGameUrl());
+
+async function waitForGame(){
+  for(let i=0;i<500;i++){
+    try{
+      const w=gameFrame.contentWindow;
+      if(w?.__g?.r1?.roaches&&w.__g.ui?.slotEls&&w.__THREE){
+        gameWindow=w;
+        G=w.__g;
+        THREE=w.__THREE;
+        GSFX=w.__SFX||null;
+        installTweezerMode();
+        installLetters();
+        if(introActive)holdGameForIntro();
+        else if(startWhenReady)beginTreatment();
+        boot.classList.add('done');
+        setTimeout(()=>boot.remove(),300);
+        return;
+      }
+    }catch(err){}
+    await delay(20);
+  }
+  boot.classList.add('done');
+  showError('游戏加载失败，请确认项目文件完整，且 game.html 与 index.html 位于同一文件夹。');
+}
+
+gameFrame.addEventListener('load',()=>{
+  installed=false;
+  cap=null;
+  waitForGame();
+});
+
+// ───────── 인트로 · 蟑螂来信 ─────────
+const LETTER={
+  feed:{color:'#8fd1b8',lines:['我要让孩子们','也能继续活下去']},
+  death:{color:'#f5a8b8',lines:['可是，','爱终究会赢']},
+  lab:{color:'#9cc8f0',lines:['多了解我们一点，','也许就没那么害怕了？'],facts:[
+    '蟑螂即使没了头，\n也能活上一周。',
+    '没了头的蟑螂最终会死去，\n是因为无法喝水。',
+    '蟑螂不吃东西，\n也能撑上一个月左右。',
+    '蟑螂一秒能跑过\n相当于自身长度 50 倍的距离。',
+    '蟑螂能把身体压扁，\n钻进只有硬币那么厚的缝隙。',
+    '蟑螂可以屏住呼吸\n长达 40 分钟。',
+    '一个卵鞘里，\n可以装下 30～40 枚卵。',
+    '蟑螂的血液不是红色的，\n而是近乎透明的。',
+    '在 3 亿年前的化石中，\n就能找到蟑螂祖先的踪迹。',
+  ]},
+};
+const LETTER_GAP=40;                    // 편지끼리 최소 간격(초)
+const introEl=document.getElementById('intro');
+const introGo=document.getElementById('introGo');
+const mailEl=document.getElementById('mail');
+const mailOk=document.getElementById('mailOk');
+let introActive=false, startWhenReady=false;
+let mailOpen=false, mailDone=null, mailPausedGame=false;
+let lastLetterAt=-1e9, feedSeen=false, labLetterShown=false;
+let killBurst=[], deathPending=0;
+
+{ // 우표 톱니
+  let d='';
+  for(let x=1;x<64;x+=6)d+=`<circle cx="${x}" cy="0" r="2.6"/><circle cx="${x}" cy="78" r="2.6"/>`;
+  for(let y=4;y<78;y+=6)d+=`<circle cx="0" cy="${y}" r="2.6"/><circle cx="62" cy="${y}" r="2.6"/>`;
+  document.getElementById('mailPerfDots').innerHTML=d;
+}
+
+// 편지 소리 (이 창에서 낸다)
+let MA=null;
+function mailAudio(){
+  if(!MA){const C=window.AudioContext||window.webkitAudioContext;if(!C)return null;try{MA=new C();}catch(e){return null;}}
+  if(MA.state==='suspended')MA.resume().catch(()=>{});
+  return MA;
+}
+function mTone(f,t,dur,gain,type='triangle'){
+  const c=MA,t0=c.currentTime+t,o=c.createOscillator(),g=c.createGain();
+  o.type=type;o.frequency.setValueAtTime(f,t0);
+  g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(gain,t0+.012);g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  o.connect(g);g.connect(c.destination);o.start(t0);o.stop(t0+dur+.05);
+}
+function mPaper(t,dur,gain,from,to){
+  const c=MA,t0=c.currentTime+t,len=Math.ceil(c.sampleRate*dur),buf=c.createBuffer(1,len,c.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*(Math.random()<.35?1:.3);
+  const s=c.createBufferSource(),f=c.createBiquadFilter(),g=c.createGain();
+  s.buffer=buf;f.type='bandpass';f.Q.value=.8;
+  f.frequency.setValueAtTime(from,t0);f.frequency.exponentialRampToValueAtTime(to,t0+dur);
+  g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(gain,t0+.03);g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  s.connect(f);f.connect(g);g.connect(c.destination);s.start(t0);
+}
+function sfxMailIn(){
+  if(!mailAudio())return;
+  [784,988,1175,1568].forEach((f,i)=>{mTone(f,i*.07,.5,.16);mTone(f*2,i*.07,.18,.04,'sine');});
+  mTone(2093,.3,.9,.07,'sine');
+  mPaper(.45,.2,.22,900,3200);
+  mPaper(.62,.28,.16,2400,1200);
+}
+function sfxMailOut(){
+  if(!mailAudio())return;
+  mPaper(0,.18,.2,1800,700);
+  mTone(1175,.05,.25,.1);mTone(1568,.12,.35,.1);
+}
+
+// 상식은 한 바퀴 다 보여 줄 때까지 겹치지 않게 뽑는다
+let factBag=[];
+function pickFact(list){
+  if(!factBag.length)factBag=list.slice().sort(()=>Math.random()-.5);
+  return factBag.pop();
+}
+function showLetter(kind,onDone){
+  const L=LETTER[kind];
+  if(!L||mailOpen)return false;
+  mailOpen=true;mailDone=onDone||null;
+  lastLetterAt=performance.now()/1000;
+  mailEl.style.setProperty('--lc',L.color);
+  const body=document.getElementById('mailBody');
+  body.textContent='';
+  for(const line of L.lines){const d=document.createElement('div');d.textContent=line;body.appendChild(d);}
+  const factText=L.facts?pickFact(L.facts):'';
+  const fact=document.getElementById('mailFact');
+  fact.hidden=!factText;
+  document.getElementById('mailFactText').textContent=factText;
+  // 게임 중이면 멈춘다
+  mailPausedGame=false;
+  if(G&&G.state==='r1'&&!labOpen&&!introActive){
+    mailPausedGame=!G.paused;
+    G.r1.cancel?.();
+    G.input.reset?.();
+    G.paused=true;
+  }
+  const env=mailEl.querySelector('.env');env.replaceWith(env.cloneNode(true));
+  mailEl.classList.remove('open','closing');
+  mailEl.classList.add('show');
+  mailEl.setAttribute('aria-hidden','false');
+  sfxMailIn();
+  setTimeout(()=>{if(mailOpen)mailEl.classList.add('open');},650);
+  return true;
+}
+function closeLetter(){
+  if(!mailOpen)return;
+  mailOpen=false;
+  lastLetterAt=performance.now()/1000;
+  sfxMailOut();
+  mailEl.classList.add('closing');
+  setTimeout(()=>{mailEl.classList.remove('show','open','closing');mailEl.setAttribute('aria-hidden','true');},280);
+  if(mailPausedGame&&G){G.paused=false;G.r1.touch?.();}
+  mailPausedGame=false;
+  const done=mailDone;mailDone=null;done?.();
+  (labOpen?labFrame.contentWindow:gameWindow)?.focus();
+}
+mailOk.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();closeLetter();});
+mailEl.addEventListener('pointerdown',()=>{if(mailOpen)mailEl.classList.add('open');});
+
+const letterFree=()=>G&&G.state==='r1'&&!labOpen&&!mailOpen&&!introActive&&!cap;
+const sinceLetter=()=>performance.now()/1000-lastLetterAt;
+let deathSeen=false, killsSinceLetter=0;
+
+// 먹이: 바퀴가 먹이에 입을 대고 1초쯤 먹으면 검사. 처음은 반드시, 이후엔 간격이 지났을 때 가끔.
+function watchFeeding(dt){
+  if(!G||G.state!=='r1')return;
+  for(const r of G.r1.roaches){
+    if(r.state!=='feed'||!r.bait||r.gone){r.__eat=0;continue;}
+    if(Math.hypot(r.tx-r.x,r.tz-r.z)>0.05)continue;
+    const before=r.__eat||0;
+    r.__eat=before+dt;
+    if(before<1&&r.__eat>=1&&!r.__eatChecked){
+      r.__eatChecked=true;
+      if(!letterFree())continue;
+      if(!feedSeen||(sinceLetter()>LETTER_GAP&&Math.random()<.15)){
+        if(showLetter('feed')){feedSeen=true;killsSinceLetter=0;}
+      }
+    }
+  }
+}
+// 죽음: 먹이 편지를 본 뒤에만.
+// 첫 번째는 먹이 편지를 닫고 세 마리째 죽일 때 반드시 뜬다.
+// 이후엔 간격이 지난 뒤 한 번에 여러 마리를 죽이면 가끔, 아니면 30마리째마다 뜬다.
+function watchKill(){
+  const t=performance.now()/1000;
+  killBurst.push(t);
+  killBurst=killBurst.filter(v=>t-v<0.6);
+  killsSinceLetter++;
+  if(deathPending||!letterFree())return;
+  let go=false;
+  if(!deathSeen)go=killsSinceLetter>=5&&sinceLetter()>2;
+  else if(sinceLetter()>LETTER_GAP)go=(killBurst.length>=3&&Math.random()<.4)||killsSinceLetter>=30;
+  if(!go)return;
+  killBurst=[];
+  deathPending=setTimeout(()=>{
+    deathPending=0;
+    if(letterFree()&&showLetter('death')){deathSeen=true;killsSinceLetter=0;}
+  },700);
+}
+function installLetters(){
+  const upd=G.r1.update.bind(G.r1);
+  G.r1.update=function(dt){const out=upd(dt);watchFeeding(dt);return out;};
+  const kill=G.r1.killRoach.bind(G.r1);
+  G.r1.killRoach=function(r,...rest){const alive=r&&r.state!=='dead';const out=kill(r,...rest);if(alive)watchKill();return out;};
+}
+
+// 인트로: 문장이 차례로 떠오른다. 화면을 누르면 한 번에 다 보인다.
+function introReveal(all){
+  const items=[...introEl.querySelectorAll('p'),introGo];
+  items.forEach((el,i)=>{
+    if(all)el.classList.add('on');
+    else setTimeout(()=>el.classList.add('on'),350+i*900);
+  });
+}
+function beginTreatment(){
+  introActive=false;
+  if(!G){startWhenReady=true;return;}
+  startWhenReady=false;
+  try{GSFX?.ensure?.();}catch(e){}
+  G.sleep=false;G.paused=false;
+  G.r1.stop();
+  G.startRound1();
+  gameWindow?.focus();
+}
+function holdGameForIntro(){
+  G.paused=true;G.sleep=true;G.ui.hintClear?.();
+}
+introEl.addEventListener('pointerdown',e=>{if(e.target!==introGo)introReveal(true);});
+introGo.addEventListener('click',e=>{
+  e.preventDefault();
+  mailAudio();
+  introEl.classList.add('gone');
+  setTimeout(()=>{introEl.hidden=true;},360);
+  beginTreatment();
+});
+if(!new URLSearchParams(location.search).get('r')){
+  introActive=true;
+  introEl.hidden=false;
+  introReveal(false);
+}
+
+
+// ───────── 소리 (게임 효과음 엔진을 빌려 쓴다) ─────────
+function sfxGrip(){
+  if(!GSFX?.ctx)return;
+  GSFX.noise({dur:.012,gain:.55,freq:5600,q:2.2});
+  GSFX.tone({dur:.035,gain:.16,freq:2900,freqEnd:1700,type:'square'});
+  GSFX.noise({t:.012,dur:.06,gain:.42,freq:1500,q:1.1,freqEnd:520});
+  GSFX.noise({t:.03,dur:.02,gain:.25,freq:3300,q:3});
+}
+function sfxScratch(){
+  if(!GSFX?.ctx)return;
+  const n=2+Math.floor(Math.random()*3);
+  for(let i=0;i<n;i++)GSFX.noise({t:i*.022+Math.random()*.012,dur:.014+Math.random()*.012,gain:.1+Math.random()*.12,freq:2600+Math.random()*3400,q:2.6});
+}
+function sfxLift(){
+  if(!GSFX?.ctx)return;
+  GSFX.noise({dur:.18,gain:.16,freq:700,q:.9,freqEnd:2400});
+}
+
+// ───────── 镊子 모델 ─────────
+function steelMaterial(color=0xb9bec2){
+  return new THREE.MeshStandardMaterial({color,roughness:.28,metalness:.5});
+}
+
+function makeTweezerRig(){
+  const root=new THREE.Group();
+  root.name='capture-tweezer';
+  root.rotation.order='YXZ';
+  const steel=steelMaterial(0xc6cbcf);
+  const dark=steelMaterial(0x7d8388);
+  const arms=[];
+  for(const side of [-1,1]){
+    const jaw=new THREE.Group();
+    jaw.position.x=side*.024;
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(.018,.012,.36),steel);
+    arm.position.z=.05;
+    arm.rotation.y=-side*.035;
+    jaw.add(arm);
+    const tip=new THREE.Mesh(new THREE.BoxGeometry(.01,.011,.105),dark);
+    tip.position.set(-side*.006,-.002,-.176);
+    tip.rotation.y=side*.08;
+    jaw.add(tip);
+    const grip=new THREE.Mesh(new THREE.BoxGeometry(.02,.014,.09),dark);
+    grip.position.set(side*.001,.001,.12);
+    jaw.add(grip);
+    root.add(jaw);
+    arms.push(jaw);
+  }
+  const bridge=new THREE.Mesh(new THREE.BoxGeometry(.078,.022,.07),dark);
+  bridge.position.z=.245;
+  root.add(bridge);
+  const SCALE=1.25;
+  root.scale.setScalar(SCALE);
+  root.visible=false;
+  root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+  root.userData.tipLocal=new THREE.Vector3(0,-.003,-.228);
+  root.userData.setGrip=value=>{
+    const gap=.024-(clamp(value)*.017);
+    arms[0].position.x=-gap;
+    arms[1].position.x=gap;
+  };
+  root.userData.setGrip(0);
+  return root;
+}
+
+function camYaw(){
+  const up=G.camUp||{x:0,z:-1};
+  return Math.atan2(up.x,up.z);
+}
+
+// 镊子 끝(두 집게 끝)이 target에 오도록 镊子 전체를 놓는다.
+function placeTweezerTip(x,y,z,pitch,yaw=camYaw()){
+  const rig=tweezerRig;
+  rig.rotation.set(pitch,yaw,0);
+  rig.updateMatrix();
+  const off=rig.userData.tipLocal.clone().multiplyScalar(rig.scale.x).applyQuaternion(rig.quaternion);
+  rig.position.set(x-off.x,y-off.y,z-off.z);
+}
+function tipWorld(out){
+  tweezerRig.updateMatrixWorld(true);
+  return tweezerRig.localToWorld(out.copy(tweezerRig.userData.tipLocal));
+}
+
+function pointTweezerAt(sx,sy,visible=true){
+  if(cap)return;
+  if(!G||!tweezerRig||G.state!=='r1'||G.r1.item!=='tweezer'||labOpen){
+    if(tweezerRig)tweezerRig.visible=false;
+    return;
+  }
+  const p=G.r1.floorPoint(sx,sy);
+  if(!p){tweezerRig.visible=false;return;}
+  tweezerRig.visible=visible;
+  placeTweezerTip(p.x,.05,p.z,-.32);
+}
+
+function selectTweezer(){
+  if(!G||G.state!=='r1')return;
+  G.r1.cancel?.();
+  G.r1.selectItem('tweezer');
+  G.ui.hint?.('点击一只活蟑螂，就能把它夹起来。',2.2,0,true);
+  preloadLab();
+  if(lastPointer)pointTweezerAt(lastPointer.x,lastPointer.y,lastPointer.type==='mouse');
+}
+
+function captureCandidateAt(sx,sy,pointerType='touch'){
+  if(!G||G.state!=='r1'||G.r1.item!=='tweezer'||labOpen||cap)return null;
+  const w=gameWindow.innerWidth||gameFrame.clientWidth||innerWidth;
+  const h=gameWindow.innerHeight||gameFrame.clientHeight||innerHeight;
+  const limit=pointerType==='mouse'?34:50;
+  const tmp=new THREE.Vector3();
+  let best=null;
+  let bestD=limit*limit;
+
+  for(const r of G.r1.roaches){
+    if(!r||r.gone||r.state==='dead'||r.state==='poison'||!r.m?.g?.visible)continue;
+    if(G.r1.underCushion?.(r.x,r.z))continue;
+    tmp.set(r.x,.035,r.z).project(G.camera);
+    if(tmp.z<-1||tmp.z>1)continue;
+    const px=(tmp.x*.5+.5)*w;
+    const py=(-tmp.y*.5+.5)*h;
+    const d=(px-sx)**2+(py-sy)**2;
+    if(d<bestD){bestD=d;best=r;}
+  }
+  return best;
+}
+
+function missSnap(sx,sy){
+  const p=G.r1.floorPoint(sx,sy);
+  if(p){
+    tweezerRig.visible=true;
+    placeTweezerTip(p.x,.012,p.z,-.42);
+  }
+  tweezerRig.userData.setGrip(1);
+  if(GSFX?.ctx)GSFX.noise({dur:.01,gain:.35,freq:5200,q:2});
+  setTimeout(()=>{
+    if(!tweezerRig||cap)return;
+    tweezerRig.userData.setGrip(0);
+    if(!(lastPointer&&lastPointer.type==='mouse'))tweezerRig.visible=false;
+  },140);
+  G.ui.hint?.('请对准蟑螂的身体点击。',1.35,0,true);
+}
+
+function captureAt(sx,sy,pointerType){
+  if(cap)return;
+  const r=captureCandidateAt(sx,sy,pointerType);
+  if(!r){missSnap(sx,sy);return;}
+  startCapture(r);
+}
+
+// ───────── 집어 올리기 ─────────
+// 0 ~ .13초: 집게가 벌어진 채 내려온다 / .13 ~ .21초: 딸깍 집는다 / .21 ~ .85초: 버둥대는 바퀴를 들어 올린다
+const CAP_DOWN=.13, CAP_GRIP=.21, CAP_LIFT=.85;
+
+function startCapture(r){
+  const i=G.r1.roaches.indexOf(r);
+  if(i>=0)G.r1.roaches.splice(i,1);   // 게임 쪽 이동·타격 판정에서 뺀다
+  r.captured=true;
+  G.r1.used?.add('tweezer');
+  G.r1.touch?.();
+  preloadLab();
+  const g=r.m.g;
+  cap={r,t:0,x:r.x,z:r.z,h:r.h||g.rotation.y||0,yaw:camYaw(),gripped:false,lifted:false,scratchT:.05,baseScale:g.scale.x,grabOff:new THREE.Vector3(0,.09,.08).multiplyScalar(g.scale.x)};
+  tweezerRig.visible=true;
+  tweezerRig.userData.setGrip(0);
+  placeTweezerTip(cap.x,.2,cap.z,-.55,cap.yaw);
+}
+
+let _tipV=null,_offV=null,_qV=null,_eV=null;
+function updateCapture(dt){
+  const c=cap;
+  if(!c)return;
+  _tipV??=new THREE.Vector3();_offV??=new THREE.Vector3();_qV??=new THREE.Quaternion();_eV??=new THREE.Euler(0,0,0,'YXZ');
+  c.t+=dt;
+  const t=c.t,r=c.r,m=r.m,g=m.g;
+  let tipY,grip,pitch;
+  if(t<CAP_DOWN){
+    const k=ease(t/CAP_DOWN);
+    tipY=lerp(.2,.024,k);grip=0;pitch=lerp(-.55,-.72,k);
+  }else if(t<CAP_GRIP){
+    const k=(t-CAP_DOWN)/(CAP_GRIP-CAP_DOWN);
+    tipY=.024-.006*Math.sin(k*Math.PI);grip=ease(clamp(k*1.6));pitch=-.72;
+    if(!c.gripped){c.gripped=true;sfxGrip();}
+  }else{
+    const k=clamp((t-CAP_GRIP)/(CAP_LIFT-CAP_GRIP));
+    tipY=lerp(.024,.62,ease(k));grip=1;pitch=lerp(-.72,-.95,k);
+    if(!c.lifted){c.lifted=true;sfxLift();}
+  }
+  // 들어 올릴 때 镊子가 살짝 흔들린다 (바퀴가 버둥대는 반동)
+  const wob=t>CAP_GRIP?Math.sin(t*38)*.012*clamp((t-CAP_GRIP)*4):0;
+  placeTweezerTip(c.x+wob,tipY,c.z,pitch,c.yaw+wob*2);
+  tweezerRig.userData.setGrip(grip);
+
+  if(t>=CAP_GRIP-.03){
+    const lift=clamp((t-CAP_GRIP)/(CAP_LIFT-CAP_GRIP));
+    // 몸통 가운데를 집힌 채 매달려 흔들린다
+    _eV.set(Math.sin(t*21)*.28*lift-.18*lift,c.h+Math.sin(t*9)*.25*lift,Math.sin(t*16+1)*.42*lift);
+    g.rotation.copy(_eV);
+    tipWorld(_tipV);
+    _offV.copy(c.grabOff).applyEuler(_eV);
+    g.position.set(_tipV.x-_offV.x,_tipV.y-_offV.y,_tipV.z-_offV.z);
+    // 다리를 미친 듯이 휘젓는다
+    m.pose?.(1,dt*(2.2+lift*1.6),0);
+    c.scratchT-=dt;
+    if(c.scratchT<=0){c.scratchT=.05+Math.random()*.07;sfxScratch();}
+  }else{
+    m.pose?.(0,dt,0);
+  }
+
+  if(t>=CAP_LIFT){
+    if(labState==='ready'){
+      finishCapture();
+    }else{
+      labPendingOpen=true;          // 실험실이 아직 안 떴으면 바퀴를 든 채 계속 버둥대게 둔다
+    }
+  }
+}
+
+function finishCapture(){
+  const c=cap;
+  if(!c)return;
+  cap=null;
+  const r=c.r;
+  r.gone=true;
+  if(r.m?.g){r.m.g.visible=false;G.r1.grp.remove(r.m.g);}
+  tweezerRig.visible=false;
+  tweezerRig.userData.setGrip(0);
+  openLab({heading:c.h,state:r.state||'wander'});
+}
+
+function addTweezerSlot(){
+  const doc=gameWindow.document;
+  if(doc.getElementById('tweezer-slot'))return;
+  const slot=doc.createElement('div');
+  slot.id='tweezer-slot';
+  slot.className='slot';
+  slot.textContent='镊子';
+  slot.title='镊子 (T)';
+  slot.addEventListener('pointerdown',e=>{
+    e.stopPropagation();
+    e.preventDefault();
+    GSFX?.ensure?.();
+    selectTweezer();
+  });
+  const col=doc.getElementById('wcol');
+  const hand=G.ui.slotEls.hand;
+  col.insertBefore(slot,hand?.nextSibling||col.firstChild);
+  G.ui.slotEls.tweezer=slot;
+}
+
+function installTweezerMode(){
+  if(installed||!G)return;
+  installed=true;
+  addTweezerSlot();
+
+  tweezerRig=makeTweezerRig();
+  G.r1.grp.add(tweezerRig);
+
+  const originalUpdate=G.r1.update.bind(G.r1);
+  G.r1.update=function(dt){
+    if(this.item!=='tweezer'&&!cap){
+      if(tweezerRig)tweezerRig.visible=false;
+      return originalUpdate(dt);
+    }
+    const mouse=this.G.input?.mouse;
+    const oldLive=mouse?.live;
+    const savedItem=this.item;
+    this.item='hand';
+    if(mouse)mouse.live=false;
+    try{
+      return originalUpdate(dt);
+    }finally{
+      this.item=savedItem;
+      if(mouse)mouse.live=oldLive;
+      if(this.itemMeshes?.hand)this.itemMeshes.hand.visible=false;
+      if(cap)updateCapture(dt);
+      else if(lastPointer&&oldLive&&savedItem==='tweezer')pointTweezerAt(lastPointer.x,lastPointer.y,true);
+      else if(tweezerRig)tweezerRig.visible=false;
+    }
+  };
+
+  const originalSelect=G.r1.selectItem.bind(G.r1);
+  G.r1.selectItem=function(kind){
+    const result=originalSelect(kind);
+    if(kind!=='tweezer'&&tweezerRig&&!cap)tweezerRig.visible=false;
+    return result;
+  };
+
+  const originalStop=G.r1.stop.bind(G.r1);
+  G.r1.stop=function(){
+    if(cap){
+      const r=cap.r;cap=null;
+      if(r?.m?.g)G.r1.grp.remove(r.m.g);
+    }
+    if(tweezerRig)tweezerRig.visible=false;
+    return originalStop();
+  };
+
+  const originalPress=G.input.onPress;
+  const originalDrag=G.input.onDrag;
+  const originalRelease=G.input.onRelease;
+  const originalCancel=G.input.onCancel;
+  const originalKey=G.input.onKey;
+
+  // 손가락 번호(id)까지 그대로 넘겨야 게임 쪽에서 양손 연타·뿌리며 두드리기를 구분한다
+  G.input.onPress=(x,y,type,id)=>{
+    if(G.state==='r1'&&(G.r1.item==='tweezer'||cap)){
+      lastPointer={x,y,type};
+      captureAt(x,y,type);
+      return;
+    }
+    originalPress?.(x,y,type,id);
+  };
+  G.input.onDrag=(x,y,id)=>{
+    if(G.state==='r1'&&(G.r1.item==='tweezer'||cap)){
+      lastPointer={x,y,type:G.input.lastType||'touch'};
+      pointTweezerAt(x,y,G.input.lastType==='mouse');
+      return;
+    }
+    originalDrag?.(x,y,id);
+  };
+  G.input.onRelease=(id)=>{
+    if(G.state==='r1'&&(G.r1.item==='tweezer'||cap))return;
+    originalRelease?.(id);
+  };
+  G.input.onCancel=()=>{
+    if(G.state==='r1'&&(G.r1.item==='tweezer'||cap)){
+      if(!cap)tweezerRig?.userData.setGrip?.(0);
+      return;
+    }
+    originalCancel?.();
+  };
+  G.input.onKey=(code,down)=>{
+    if(G.state==='r1'&&down&&code==='KeyT'){
+      selectTweezer();
+      return;
+    }
+    originalKey?.(code,down);
+  };
+
+  gameWindow.addEventListener('pointermove',e=>{
+    lastPointer={x:e.clientX,y:e.clientY,type:e.pointerType==='mouse'?'mouse':'touch'};
+    if(G.state==='r1'&&G.r1.item==='tweezer'&&e.pointerType==='mouse')pointTweezerAt(e.clientX,e.clientY,true);
+  },{passive:true});
+  gameWindow.addEventListener('pointerleave',()=>{if(tweezerRig&&!cap)tweezerRig.visible=false;});
+}
+
+// ───────── 실험실 ─────────
+// 잡을 때마다 새로 불러오면 매번 로딩 공백이 생긴다. 镊子를 처음 고를 때 한 번만 불러 두고 재운다.
+function preloadLab(){
+  if(labState!=='none')return;
+  labState='loading';
+  loadPage(labFrame,'specimen-lab.html?embed=1');
+}
+
+function labApi(){
+  try{return labFrame.contentWindow?.SpecimenLab||null;}catch(err){return null;}
+}
+
+function enterLab(){
+  const L=labApi();
+  if(!L)return;
+  try{
+    L.enter?.({
+      reset:true,
+      showIntro:false,
+      showHUD:true,
+      showToolbar:true,
+      showActions:true,
+      enabledTools:['tweezer','pin','camera'],
+      quality:'auto'
+    });
+  }catch(err){console.error(err);}
+}
+
+function openLab(meta={}){
+  if(labOpen||!G)return;
+  labOpen=true;
+  closeBusy=false;
+  pausedBeforeLab=!!G.paused;
+  G.paused=true;
+  G.sleep=true;                       // 뒤에 가려진 게임은 그리지 않는다
+  G.r1.cancel?.();
+  G.input.reset?.();
+  if(tweezerRig)tweezerRig.visible=false;
+  labLayer.classList.add('open');
+  labLayer.setAttribute('aria-hidden','false');
+  gameFrame.classList.add('covered');
+  enterLab();
+  setTimeout(()=>{if(labOpen)showLetter('lab');},450);
+}
+
+function closeLab(){
+  if(!labOpen||closeBusy||mailOpen)return;
+  closeBusy=true;
+  try{labApi()?.sleep?.();}catch(err){console.warn(err);}
+  labLayer.classList.remove('open');
+  labLayer.setAttribute('aria-hidden','true');
+  gameFrame.classList.remove('covered');
+  labOpen=false;
+  if(G){
+    G.sleep=false;
+    G.paused=pausedBeforeLab;
+    G.r1.touch?.();
+    G.ui.hint?.('还可以用镊子夹起其他蟑螂。',1.6,.1,true);
+  }
+  setTimeout(()=>{closeBusy=false;},160);
+  gameWindow?.focus();
+}
+
+labBack.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  e.stopPropagation();
+  closeLab();
+});
+
+window.addEventListener('message',e=>{
+  if(e.source!==labFrame.contentWindow)return;
+  if(e.data?.type==='specimen-lab-ready'){
+    labState='ready';
+    if(labPendingOpen&&cap){
+      labPendingOpen=false;
+      finishCapture();
+    }else if(!labOpen){
+      labApi()?.sleep?.();
+    }
+  }
+  if(e.data?.type==='specimen-lab-close')closeLab();
+});
+
+window.addEventListener('keydown',e=>{
+  if(e.code==='Escape'&&mailOpen){e.preventDefault();closeLetter();return;}
+  if(e.code==='Escape'&&labOpen){e.preventDefault();closeLab();}
+});
+})();
+</script>
+</body>
+</html>
