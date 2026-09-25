@@ -204,7 +204,7 @@ button{font-family:inherit;color:inherit;border:0;background:none;padding:0;marg
     <div class="now"></div>
     <div class="sub"></div>
     <div class="list"></div>
-    <div class="again">点击屏幕，以相同条件再玩一次</div>
+    <div class="again">点击屏幕，用同样的条件再来一局</div>
     <button class="allover">从头开始</button>
   </div>
 
@@ -2256,7 +2256,7 @@ const HINTS={
   hideOut:(p)=>`已离开${p}。只有待在藏身处，才能避开人类的视线。`,
 
   watch:
-    '卵鞘还在。',
+    '你死了，但卵鞘还在。守住它，等它孵化。',
 
   ripe:
     '卵鞘已成熟。就算你死了，下一代也会从这里出生。',
@@ -3278,7 +3278,7 @@ clearTraps(){
         this.G.ui.eggReady(true);
         this.G.ui.eggBar(
           this.phase==='watch'
-            ? '孵化'
+            ? '卵鞘孵化了'
             : '卵鞘已成熟',
           false
         );
@@ -4149,9 +4149,11 @@ G.showRank=function(gen,ended){
 
   list=list
     .filter(o=>o&&Number.isFinite(Number(o.g)))
-    .map(o=>({g:Number(o.g),t:Number(o.t)||0,e:!!o.e}));
+    .map(o=>({g:Number(o.g),t:Number(o.t)||0,e:!!o.e,n:Number(o.n)||0}));
 
-  list.push({g:gen,t:now,e:!!ended});
+  // 这一局最多能走几代（由第一阶段用过的工具决定），排名规则不变，只在记录里标出来
+  const total=G.r2.weapons?G.r2.weapons.length+1:0;
+  list.push({g:gen,t:now,e:!!ended,n:total});
 
   // 세대 수가 많은 순. 같으면 먼저 세운 기록이 위.
   list.sort((a,b)=>(b.g-a.g)||(a.t-b.t));
@@ -4166,13 +4168,13 @@ G.showRank=function(gen,ended){
   const rk=document.getElementById('rank');
 
   rk.querySelector('.now').innerHTML=
-    `${generations}<small>代</small>`;
+    `${generations}<small>代${total?` / 共 ${total} 代`:''}</small>`;
 
   rk.querySelector('.sub').textContent=
     (ended?'人类离开了房间。':`生命延续了 ${generations} 代。`)+
     (me>=0?` 本次排名第 ${me+1}。`:'');
 
-  const row=(o,i)=>`<div class="${o.t===now?'me':''}">第 ${i+1} 名 · ${o.g+1} 代${o.e?' · 已通关':''}</div>`;
+  const row=(o,i)=>`<div class="${o.t===now?'me':''}">第 ${i+1} 名 · ${o.g+1} 代${o.n?` / 共 ${o.n} 代`:''}${o.e?' · 已通关':''}</div>`;
   let html=list.slice(0,5).map(row).join('');
   if(me>=5) html+=`<div class="gap">⋯</div>`+row(list[me],me);
   rk.querySelector('.list').innerHTML=html;

@@ -8,6 +8,7 @@ L.run('第二阶段',{},async(t,{page,cdp})=>{
   await L.startFromIntro(page,game);
   await L.autoCloseLetters(page);
   await game.evaluate(()=>{window.__hints=[];const h=document.getElementById('hint');new MutationObserver(()=>{const s=h.textContent;if(s&&__hints[__hints.length-1]!==s)__hints.push(s)}).observe(h,{childList:true,characterData:true,subtree:true});
+    window.__eggbar=[];const eb=document.getElementById('eggbar');new MutationObserver(()=>{if(eb.textContent)__eggbar.push(eb.textContent)}).observe(eb,{childList:true,characterData:true,subtree:true});
     window.__gen=[];const gl=document.getElementById('genlabel');new MutationObserver(()=>{if(gl.textContent)__gen.push(gl.innerText.replace(/\n/g,' / '))}).observe(gl,{childList:true,subtree:true});});
   // 第一阶段用拖鞋、平底锅、杀虫剂，再放一次米饭
   for(const k of ['slipper','pan','spray','rice']){ await game.evaluate(k=>__g.r1.selectItem(k),k); await page.mouse.click(640,420); await page.waitForTimeout(400);}
@@ -55,9 +56,11 @@ L.run('第二阶段',{},async(t,{page,cdp})=>{
     t.ok(s.phase==='watch'&&s.upY>0.999,`${type} 死后观战画面是正的（phase=${s.phase}, up.y=${s.upY.toFixed(3)}）`);
   }
   await page.screenshot({path:L.path.join(L.OUT,'round2-watch.png')});
+  t.ok((await game.evaluate(()=>__hints)).includes('你死了，但卵鞘还在。守住它，等它孵化。'),'观战提示');
   await game.evaluate(()=>{__g.r2.egg.t=__g.r2.eggT-0.1;});
   await page.waitForTimeout(2000);
   t.eq(await gen(game),g0+1,'观战中卵鞘孵化 → 下一代');
+  t.ok((await game.evaluate(()=>__eggbar)).includes('卵鞘孵化了'),'观战时卵鞘条写“卵鞘孵化了”');
 
   // 一路推进到结局
   for(let i=0;i<10&&await phase(game)!=='leave';i++){
@@ -69,6 +72,8 @@ L.run('第二阶段',{},async(t,{page,cdp})=>{
   const rank=(await game.locator('#rank').innerText()).replace(/\n+/g,' | ');
   t.info('排名页：'+rank);
   t.ok(rank.includes('人类离开了房间'),'结局排名页');
+  t.ok(rank.includes('5代 / 共 5 代')&&rank.includes('第 1 名 · 5 代 / 共 5 代 · 已通关'),'排名记录显示“X 代 / 共 Y 代”');
+  t.ok(rank.includes('点击屏幕，用同样的条件再来一局'),'排名页再来一局的说明');
   await page.screenshot({path:L.path.join(L.OUT,'rank.png')});
 
   // 同条件再玩：没产卵就死 → “没有留下卵鞘” → 排名

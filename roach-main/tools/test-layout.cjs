@@ -9,6 +9,7 @@ const overlap=(a,b)=>a&&b&&a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top
       const game=await L.openGame(page);
       await page.waitForTimeout(600);
       const tap=mobile?(sel)=>page.locator(sel).tap({timeout:5000}):(sel)=>page.locator(sel).click({timeout:5000});
+      t.eq(await page.locator('#intro .tag').innerText(),'脱敏小练习','开场标签');
       await tap('#intro');
       await page.waitForTimeout(300);
       const b=await page.evaluate(()=>{const r=document.getElementById('introGo').getBoundingClientRect();return {bottom:r.bottom,vh:innerHeight}});
