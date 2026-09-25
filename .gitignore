@@ -1,2 +1,4 @@
 node_modules/
 roach-main/tools/out/
+# 本地交接说明，不进仓库
+roach-main/蟑螂小游戏-交接说明.md
