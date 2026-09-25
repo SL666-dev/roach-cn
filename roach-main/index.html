@@ -222,6 +222,7 @@ async function waitForGame(){
         if(introActive)holdGameForIntro();
         else if(startWhenReady)beginTreatment();
         updateRotate();
+        pushSafeArea();
         boot.classList.add('done');
         setTimeout(()=>boot.remove(),300);
         return;
@@ -454,8 +455,35 @@ function updateRotate(){
   if(on&&!G.paused){G.paused=true;rotatePaused=true;G.r1.cancel?.();G.input.reset?.();}
   else if(!on&&rotatePaused){rotatePaused=false;if(!mailOpen&&!labOpen){G.paused=false;G.r1.touch?.();}}
 }
-addEventListener('resize',updateRotate);
-addEventListener('orientationchange',updateRotate);
+// ───────── 安全区 · 地址栏 · 缩放 ─────────
+// iOS 上 iframe 里的 env(safe-area-inset-*) 取到 0：由首页量出来，写进游戏和标本室页面的 --sa-t/r/b/l。
+// ?safe=上,右,下,左（像素）可以在电脑上模拟刘海屏。
+const safeProbe=document.createElement('div');
+safeProbe.style.cssText='position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+document.body.appendChild(safeProbe);
+const SAFE_FORCE=(new URLSearchParams(location.search).get('safe')||'').split(',').map(Number);
+function pushSafeArea(){
+  const cs=getComputedStyle(safeProbe);
+  const v=SAFE_FORCE.length===4&&SAFE_FORCE.every(n=>n>=0)?SAFE_FORCE:[cs.paddingTop,cs.paddingRight,cs.paddingBottom,cs.paddingLeft].map(parseFloat);
+  for(const f of [gameFrame,labFrame]){
+    try{const r=f.contentDocument?.documentElement;if(!r)continue;['t','r','b','l'].forEach((k,i)=>r.style.setProperty('--sa-'+k,(v[i]||0)+'px'));}catch(err){}
+  }
+}
+// 转屏或地址栏伸缩后：iOS 有时会留下页面滚动偏移，安全区也要过一会儿才更新
+function onViewport(){
+  if(scrollX||scrollY)scrollTo(0,0);
+  updateRotate();pushSafeArea();
+  clearTimeout(onViewport.t);onViewport.t=setTimeout(()=>{updateRotate();pushSafeArea();},350);
+}
+addEventListener('resize',onViewport);
+addEventListener('orientationchange',onViewport);
+if(window.visualViewport)visualViewport.addEventListener('resize',onViewport);
+gameFrame.addEventListener('load',pushSafeArea);
+labFrame.addEventListener('load',pushSafeArea);
+// iOS Safari 不理会 user-scalable=no：拦下双指缩放手势和双击缩放
+for(const ev of ['gesturestart','gesturechange','dblclick'])document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
+// 来信的音效用首页自己的 AudioContext：只在已经建好时，借用户点击把它从 suspended / interrupted 恢复
+for(const ev of ['touchend','click'])addEventListener(ev,()=>{if(MA&&MA.state!=='running')MA.resume().catch(()=>{});},{capture:true,passive:true});
 
 if(!new URLSearchParams(location.search).get('r')){
   introActive=true;

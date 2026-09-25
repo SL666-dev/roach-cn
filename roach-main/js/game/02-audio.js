@@ -17,8 +17,12 @@ class AudioFX{
       for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
       this.noiseBuf=buf;
     }
-    if(this.ctx.state==='suspended') this.ctx.resume().catch(()=>{});
+    // iOS 从后台回来时状态是 interrupted，不只是 suspended
+    if(this.ctx.state!=='running') this.ctx.resume().catch(()=>{});
   }
+  // iOS 上触屏的 pointerdown 不算用户手势，要在 touchend / pointerup / click 里再 resume 一次，并播一个静音样本把音频通道真正打开
+  unlock(){ this.ensure(); if(!this.ctx||this._unlocked) return;
+    try{ const s=this.ctx.createBufferSource(); s.buffer=this.ctx.createBuffer(1,1,22050); s.connect(this.ctx.destination); s.start(0); this._unlocked=true; }catch(err){} }
   get t(){return this.ctx?this.ctx.currentTime:0;}
   env(g,t,att,dur,peak){ g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(Math.max(peak,0.0002),t+att); g.gain.exponentialRampToValueAtTime(0.0001,t+att+dur); }
   noise({t=0,dur=0.1,gain=0.5,att=0.002,type='bandpass',freq=2000,q=1,freqEnd=null,rate=1,pan=0,trem=0}={}){
@@ -182,5 +186,6 @@ class AudioFX{
   toxWarn(){ if(!this.ctx) return; this.tone({dur:0.18,gain:0.1,freq:210,freqEnd:150,type:'sawtooth'}); }
 }
 const SFX=new AudioFX();
+for(const ev of ['touchend','pointerup','click','keydown']) window.addEventListener(ev,()=>SFX.unlock(),{capture:true,passive:true});
 // 휴대폰 브라우저는 손가락을 '뗄 때'만 소리 재생을 허락한다. 누를 때만 깨우면 끝까지 무음이 된다.
 for(const ev of ['pointerdown','pointerup','touchend','click','keydown']) window.addEventListener(ev,()=>SFX.ensure(),{capture:true,passive:true});

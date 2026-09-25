@@ -24,6 +24,8 @@ class Input{
     window.addEventListener('keydown',e=>{ if(!this.keys.has(e.code)){ this.keys.add(e.code); this.onKey&&this.onKey(e.code,true);} this.onAny&&this.onAny(); if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault(); });
     window.addEventListener('keyup',e=>{ this.keys.delete(e.code); this.onKey&&this.onKey(e.code,false); });
     document.addEventListener('contextmenu',e=>e.preventDefault());
+    // iOS Safari 不理会 user-scalable=no：拦下双指缩放手势和双击缩放
+    for(const ev of ['gesturestart','gesturechange','dblclick']) document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
     canvas.addEventListener('auxclick',e=>e.preventDefault());
     window.addEventListener('blur',()=>{ this.keys.clear(); this.reset(); });
     // 手机切到后台时不一定会发 pointercancel，回来后摇杆会卡在按下状态

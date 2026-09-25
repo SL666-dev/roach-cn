@@ -64,6 +64,8 @@ G.view={w:1.5,h:3.3}; G.ppm=260;
 G.resize=function(){ const w=innerWidth,h=innerHeight; G.renderer.setSize(w,h,false); G.renderer.setPixelRatio(Math.min(devicePixelRatio||1,QUALITY.dpr)); G.camera.aspect=w/h; G.ppm=clamp(Math.min(w,h)/1.5,200,340); G.portrait=h>=w; G.camera.updateProjectionMatrix(); const V=h/G.ppm; G.topH=V/(2*Math.tan(G.camera.fov*Math.PI/360)); if(G.portrait){ G.view.h=V; G.view.w=V*w/h; } else { G.view.w=V; G.view.h=V*w/h; } };
 G.setTopCam=function(cx,cz,scale=1){ const cam=G.camera; if(cam.fov!==40){ cam.fov=40; cam.updateProjectionMatrix(); G.resize(); } cam.up.set(G.portrait?0:1,0,G.portrait?-1:0); cam.position.set(cx,G.topH*scale,cz); cam.lookAt(cx,0,cz); if(G.portrait){ G.camRight.set(1,0,0); G.camUp.set(0,0,-1); } else { G.camRight.set(0,0,1); G.camUp.set(1,0,0); } };
 window.addEventListener('resize',()=>G.resize());
+// iOS 地址栏伸缩时有时只改 visualViewport，不发 window resize
+if(window.visualViewport) visualViewport.addEventListener('resize',()=>G.resize());
 G.input=new Input(G.canvas); G.ui=new UI(G); G.r1=new Round1(G); G.r2=new Round2(G);
 const inR1=()=>G.state==='r1';
 G.input.onPress=(x,y,t,id)=>{ if(inR1()) G.r1.press(x,y,t,id); };
@@ -244,7 +246,7 @@ G.advance=function(T,step=1/60){
 // ?debug：屏幕下方显示帧率、最慢一帧、draw call、三角形和画质，真机调性能用。每 0.5 秒刷新，draw call/三角形取这段时间的最大值（阴影隔帧更新时两帧不同）。
 G.debug=QS.has('debug')?(()=>{
   const el=document.createElement('div'); el.id='dbg';
-  el.style.cssText='position:fixed;left:50%;bottom:calc(4px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99;padding:3px 8px;border-radius:6px;background:rgba(0,0,0,.62);color:#fff;font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;white-space:pre;pointer-events:none';
+  el.style.cssText='position:fixed;left:50%;bottom:calc(4px + var(--sa-b,env(safe-area-inset-bottom)));transform:translateX(-50%);z-index:99;padding:3px 8px;border-radius:6px;background:rgba(0,0,0,.62);color:#fff;font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;white-space:pre;pointer-events:none';
   document.body.appendChild(el);
   let n=0,t0=performance.now(),prev=t0,worst=0,work=0,calls=0,tris=0;
   return (ms)=>{

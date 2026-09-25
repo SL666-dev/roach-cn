@@ -123,6 +123,21 @@ const pct=(a,b)=>b?`${a>=b?'+':''}${((a-b)/b*100).toFixed(0)}%`:'';
     t.ok(s.shell==='MeshStandardMaterial'&&s.goo==='MeshStandardMaterial',`甲壳和内脏改用普通材质（${s.shell} / ${s.goo}）`);
     await page.screenshot({path:L.path.join(L.OUT,'mobile-switches-r2.png')});
   });
+  // 安全区：首页把 ?safe= 模拟的刘海屏安全区写进 iframe，按钮要让开；轻点一下后音频解锁
+  await L.run('iPhone 刘海屏安全区 ?safe=0,47,21,47',{viewport:DEVICES[1].viewport,touch:true,mobile:true,dpr:DEVICES[1].dpr},async(t,{page})=>{
+    const game=await L.openGame(page,'?safe=0,47,21,47');
+    await L.startFromIntro(page,game);
+    const W=DEVICES[1].viewport.width;
+    const r1=await game.evaluate(()=>{const b=id=>document.getElementById(id).getBoundingClientRect();return {sa:getComputedStyle(document.documentElement).getPropertyValue('--sa-r'),w:b('wcol').right,bl:b('bcol').left,bb:b('bcol').bottom};});
+    t.ok(r1.sa.trim()==='47px','首页把安全区写进游戏页（--sa-r = '+r1.sa+'）');
+    t.ok(r1.w<=W-47-10+1&&r1.bl>=47+10-1&&r1.bb<=DEVICES[1].viewport.height-21-12+1,`第一阶段按钮让开刘海和底部横条（${JSON.stringify(r1)}）`);
+    await page.touchscreen.tap(W*0.45,200); await page.waitForTimeout(300);
+    t.ok(await game.evaluate(()=>SFX._unlocked&&!!SFX.ctx),'轻点后音频解锁');
+    await game.evaluate(()=>__g.toRound2()); await game.waitForFunction(()=>__g.state==='r2'); await page.waitForTimeout(2500);
+    const r2=await game.evaluate(()=>{const b=id=>document.getElementById(id).getBoundingClientRect();return {pad:b('pad').right,mini:b('mini').right};});
+    t.ok(r2.pad<=W-47-16+1&&r2.mini<=W-47-12+1,`第二阶段按钮和小地图让开刘海（${JSON.stringify(r2)}）`);
+    await page.screenshot({path:L.path.join(L.OUT,'mobile-iphone-safe-r2.png')});
+  });
   await L.run('电脑档不受手机开关影响',{},async(t,{page})=>{
     const game=await L.openGame(page,'?r=2&dpr=1.25&aa=0&cc=0');
     await page.waitForTimeout(800);
