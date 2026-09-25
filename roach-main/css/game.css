@@ -157,3 +157,12 @@ button{font-family:inherit;color:inherit;border:0;background:none;padding:0;marg
 #rank .list .gap{opacity:.5;line-height:1.2}
 #rank .again{position:absolute;left:0;right:0;bottom:calc(96px + var(--sa-b,env(safe-area-inset-bottom)));text-align:center;font-size:16px;color:var(--ink2);opacity:.8;font-family:var(--sans)}
 #rank .allover{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(34px + var(--sa-b,env(safe-area-inset-bottom)));padding:11px 20px;border-radius:999px;background:var(--ivory);font-size:14px;font-weight:600;font-family:var(--sans);box-shadow:0 2px 0 var(--edge)}
+/* 矮屏幕（横屏手机、Safari 地址栏占位）：代数和说明放左边，排名放右边，按钮留在底部可见 */
+@media (max-height:450px){
+  #rank .now{top:12%;right:50%;font-size:64px}
+  #rank .now small{font-size:26px}
+  #rank .sub{top:calc(12% + 80px);right:50%;font-size:15px;line-height:1.55}
+  #rank .list{top:10%;left:50%;font-size:15px;line-height:1.6;max-height:calc(100% - 10% - 96px);overflow:hidden}
+  #rank .again{bottom:calc(56px + var(--sa-b,env(safe-area-inset-bottom)));font-size:14px}
+  #rank .allover{bottom:calc(10px + var(--sa-b,env(safe-area-inset-bottom)))}
+}

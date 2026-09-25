@@ -138,6 +138,49 @@ const pct=(a,b)=>b?`${a>=b?'+':''}${((a-b)/b*100).toFixed(0)}%`:'';
     t.ok(r2.pad<=W-47-16+1&&r2.mini<=W-47-12+1,`第二阶段按钮和小地图让开刘海（${JSON.stringify(r2)}）`);
     await page.screenshot({path:L.path.join(L.OUT,'mobile-iphone-safe-r2.png')});
   });
+  // iPhone 横屏 + Safari 地址栏占位（可见高度只剩 320）：所有弹窗和按钮都要完整可见、点得到
+  await L.run('iPhone 横屏矮屏幕 844×320 弹窗',{viewport:{width:844,height:320},touch:true,mobile:true,dpr:3},async(t,{page})=>{
+    const H=320, shot=n=>page.screenshot({path:L.path.join(L.OUT,`mobile-short-${n}.png`)});
+    const inView=(r,label)=>t.ok(r&&r.top>=-1&&r.bottom<=H+1&&r.left>=-1&&r.right<=844+1&&r.height>0,`${label}完整可见（${r?[r.left,r.top,r.right,r.bottom].map(Math.round).join(','):'无'}）`);
+    const box=(frame,sel)=>frame.evaluate(s=>{const e=document.querySelector(s);if(!e)return null;const r=e.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,height:r.height};},sel);
+    const game=await L.openGame(page);
+    await page.waitForTimeout(500);
+    await page.locator('#intro').tap(); await page.waitForTimeout(400);
+    inView(await box(page,'#introGo'),'开场“开始”按钮'); await shot('intro');
+    await page.locator('#introGo').tap();
+    await game.waitForFunction(()=>__g.state==='r1'&&!__g.r1.intro,{},{timeout:10000});
+    const mailShown=()=>page.evaluate(()=>{const m=document.querySelector('#mail');return m.classList.contains('show')&&!m.classList.contains('closing');});
+    for(const kind of ['feed','death','lab']){
+      await page.evaluate(k=>__showLetter(k),kind); await page.waitForTimeout(1300);
+      inView(await box(page,'#mail .card'),`来信（${kind}）信纸`);
+      inView(await box(page,'#mailOk'),`来信（${kind}）“知道了”按钮`);
+      await shot('mail-'+kind);
+      if(kind==='lab'){
+        t.ok(await page.evaluate(()=>getComputedStyle(document.getElementById('mailFactText')).display==='none'),'矮屏幕上冷知识默认折叠');
+        await page.locator('#mailFact').tap(); await page.waitForTimeout(200);
+        t.ok(await page.evaluate(()=>getComputedStyle(document.getElementById('mailFactText')).display!=='none'),'轻点冷知识展开');
+        inView(await box(page,'#mailOk'),'展开冷知识后“知道了”按钮仍');
+        await shot('mail-lab-open');
+        // 点遮罩关闭
+        await page.touchscreen.tap(40,H/2); await page.waitForTimeout(500);
+        t.ok(!(await mailShown()),'点信纸外的遮罩关闭来信');
+      } else {
+        await page.locator('#mailOk').tap(); await page.waitForTimeout(500);
+        t.ok(!(await mailShown()),`点“知道了”关闭来信（${kind}）`);
+      }
+    }
+    // “要停下来吗？”确认
+    await game.evaluate(()=>{__g.ui.confirm.classList.add('show');});
+    inView(await box(game,'#confirm .stop'),'“停下来”按钮'); inView(await box(game,'#confirm .more'),'“继续”按钮');
+    await game.evaluate(()=>{__g.ui.confirm.classList.remove('show');});
+    // 结算排名：7 行（前 5 名 + 省略号 + 自己）
+    await game.evaluate(()=>{localStorage.setItem('roach_gens',JSON.stringify([9,8,7,6,5,4,3].map((g,i)=>({g,t:i+1,e:false,n:10}))));__g.showRank(0,false);});
+    await page.waitForTimeout(600);
+    for(const [sel,label] of [['#rank .now','结算代数'],['#rank .sub','结算说明'],['#rank .list','排名列表'],['#rank .again','“再来一局”提示'],['#rank .allover','“从头开始”按钮']]) inView(await box(game,sel),label);
+    const rk=await game.evaluate(()=>{const b=s=>document.querySelector(s).getBoundingClientRect();const o=(a,c)=>a.left<c.right&&c.left<a.right&&a.top<c.bottom&&c.top<a.bottom;const n=b('#rank .now'),s=b('#rank .sub'),l=b('#rank .list'),g=b('#rank .again'),a=b('#rank .allover');return o(n,l)||o(s,l)||o(l,g)||o(s,g)||o(g,a);});
+    t.ok(!rk,'结算页各部分互不重叠');
+    await shot('rank');
+  });
   await L.run('电脑档不受手机开关影响',{},async(t,{page})=>{
     const game=await L.openGame(page,'?r=2&dpr=1.25&aa=0&cc=0');
     await page.waitForTimeout(800);
