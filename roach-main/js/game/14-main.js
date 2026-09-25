@@ -15,7 +15,7 @@ G.camera=new THREE.PerspectiveCamera(40,1,0.01,40); G.camBase=new THREE.Vector3(
 Object.defineProperty(G,'isTouch',{get:()=>G.input?G.input.lastType==='touch':COARSE_POINTER});
 G.paint=new FloorPaint();
 G.room=buildRoom(G.scene);
-G.corpses=new Corpses(G.scene);
+G.corpses=new Corpses(G.scene,QUALITY.corpseCap);
 { const ov=new THREE.Mesh(new THREE.PlaneGeometry(4,6),new THREE.MeshStandardMaterial({map:G.paint.tex,transparent:true,roughness:0.65,metalness:0,depthWrite:false})); ov.rotation.x=-Math.PI/2; ov.position.y=0.002; ov.receiveShadow=true; ov.renderOrder=1; G.scene.add(ov); }
 // 조명 — 1라운드도 2라운드도 같은 낮이다. 다른 건 보는 높이뿐.
 const SM=COARSE_POINTER?1024:1536;

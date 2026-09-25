@@ -28,6 +28,7 @@ const QUALITY=(()=>{
     paintScale:mobile?2/3:1,       // 地面污渍贴图分辨率
     paintHz:mobile?5:10,           // 地面污渍贴图每秒最多上传几次
     corpseLod:mobile?0.4:0.65,     // 尸体网格细分系数（尸体俯视下只有几十像素宽）
+    corpseCap:mobile?200:600,      // 尸体上限：超出后最早的尸体消失（活蟑螂数量不受影响）
   };
 })();
 

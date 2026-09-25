@@ -41,7 +41,8 @@ const pct=(a,b)=>b?`${a>=b?'+':''}${((a-b)/b*100).toFixed(0)}%`:'';
       await scene('r1-peak','第一阶段高峰 40 成虫 + 18 若虫');
       await game.evaluate(()=>{const r1=__g.r1;for(const r of r1.roaches.slice()) if(r.state!=='dead') r1.killRoach(r,'slipper',r.x,r.z);});
       for(let k=0;k<2;k++){ await game.evaluate(()=>{const r1=__g.r1;for(let i=0;i<300;i++){const r=r1.spawn(true);r1.killRoach(r,['hand','slipper','flame','spray'][i%4],r.x,r.z);}}); await page.waitForTimeout(1500); }
-      await scene('r1-corpses','第一阶段打死 600 只后');
+      const cs=await scene('r1-corpses','第一阶段打死 600 只后');
+      t.ok(cs.corpses<=quality.corpseCap,`尸体不超过上限（${cs.corpses} / ${quality.corpseCap}）`);
 
       // 双指拖动画面：画面要移动；不该打出工具（记录拖动期间落地的打击和放下的诱饵）
       await game.evaluate(()=>{__g.corpses.clear();const r1=__g.r1;r1.selectItem('slipper');window.__hits=0;for(const k of ['impact','placeBait']){const f=r1[k].bind(r1);r1[k]=(...a)=>{__hits++;return f(...a);};}});
