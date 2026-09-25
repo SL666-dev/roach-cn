@@ -104,4 +104,20 @@ const pct=(a,b)=>b?`${a>=b?'+':''}${((a-b)/b*100).toFixed(0)}%`:'';
       }
     });
   }
+  // 手机档单项开关：像素比上限、关抗锯齿、去掉 clearcoat
+  await L.run('手机档开关 ?dpr=1.25&aa=0&cc=0',{viewport:DEVICES[0].viewport,touch:true,mobile:true,dpr:DEVICES[0].dpr},async(t,{page})=>{
+    const game=await L.openGame(page,'?r=2&dpr=1.25&aa=0&cc=0');
+    await page.waitForTimeout(2500);
+    const s=await game.evaluate(()=>({pr:__g.renderer.getPixelRatio(),aa:__g.renderer.getContext().getContextAttributes().antialias,shell:MAT.roachShell.type,goo:MAT.goo.type}));
+    t.eq(s.pr,1.25,'像素比上限 1.25');
+    t.eq(s.aa,false,'抗锯齿关闭');
+    t.ok(s.shell==='MeshStandardMaterial'&&s.goo==='MeshStandardMaterial',`甲壳和内脏改用普通材质（${s.shell} / ${s.goo}）`);
+    await page.screenshot({path:L.path.join(L.OUT,'mobile-switches-r2.png')});
+  });
+  await L.run('电脑档不受手机开关影响',{},async(t,{page})=>{
+    const game=await L.openGame(page,'?r=2&dpr=1.25&aa=0&cc=0');
+    await page.waitForTimeout(800);
+    const s=await game.evaluate(()=>({mobile:__g.quality.mobile,aa:__g.renderer.getContext().getContextAttributes().antialias,shell:MAT.roachShell.type}));
+    t.ok(!s.mobile&&s.aa&&s.shell==='MeshPhysicalMaterial',JSON.stringify(s));
+  });
 })();

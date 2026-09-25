@@ -5,7 +5,7 @@
 // ───────── 게임 전체 ─────────
 const G={time:0,state:'boot',shakeAmt:0,savedWeapons:null,savedBaits:null};
 G.canvas=document.getElementById('gl');
-G.renderer=new THREE.WebGLRenderer({canvas:G.canvas,antialias:true,powerPreference:'high-performance'});
+G.renderer=new THREE.WebGLRenderer({canvas:G.canvas,antialias:QUALITY.aa,powerPreference:'high-performance'});
 G.renderer.shadowMap.enabled=true; G.renderer.shadowMap.type=QUALITY.softShadow?THREE.PCFSoftShadowMap:THREE.PCFShadowMap;
 // 手机上阴影贴图隔帧更新（影子最多慢一帧），省掉一半阴影绘制
 G.renderer.shadowMap.autoUpdate=QUALITY.shadowEvery<=1; G.frameN=0; G.renderer.toneMapping=THREE.ACESFilmicToneMapping; G.renderer.toneMappingExposure=1.0; G.renderer.outputColorSpace=THREE.SRGBColorSpace;
@@ -61,7 +61,7 @@ G.setLighting=function(mode){
 G.shake=function(a){ G.shakeAmt=Math.max(G.shakeAmt,a); };
 G.blackout=function(on,instant=true){ const f=document.getElementById('fade'); f.style.transition=instant?'none':'opacity .6s'; f.style.background='#000'; f.style.opacity=on?'1':'0'; };
 G.view={w:1.5,h:3.3}; G.ppm=260;
-G.resize=function(){ const w=innerWidth,h=innerHeight; G.renderer.setSize(w,h,false); G.renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5)); G.camera.aspect=w/h; G.ppm=clamp(Math.min(w,h)/1.5,200,340); G.portrait=h>=w; G.camera.updateProjectionMatrix(); const V=h/G.ppm; G.topH=V/(2*Math.tan(G.camera.fov*Math.PI/360)); if(G.portrait){ G.view.h=V; G.view.w=V*w/h; } else { G.view.w=V; G.view.h=V*w/h; } };
+G.resize=function(){ const w=innerWidth,h=innerHeight; G.renderer.setSize(w,h,false); G.renderer.setPixelRatio(Math.min(devicePixelRatio||1,QUALITY.dpr)); G.camera.aspect=w/h; G.ppm=clamp(Math.min(w,h)/1.5,200,340); G.portrait=h>=w; G.camera.updateProjectionMatrix(); const V=h/G.ppm; G.topH=V/(2*Math.tan(G.camera.fov*Math.PI/360)); if(G.portrait){ G.view.h=V; G.view.w=V*w/h; } else { G.view.w=V; G.view.h=V*w/h; } };
 G.setTopCam=function(cx,cz,scale=1){ const cam=G.camera; if(cam.fov!==40){ cam.fov=40; cam.updateProjectionMatrix(); G.resize(); } cam.up.set(G.portrait?0:1,0,G.portrait?-1:0); cam.position.set(cx,G.topH*scale,cz); cam.lookAt(cx,0,cz); if(G.portrait){ G.camRight.set(1,0,0); G.camUp.set(0,0,-1); } else { G.camRight.set(0,0,1); G.camUp.set(1,0,0); } };
 window.addEventListener('resize',()=>G.resize());
 G.input=new Input(G.canvas); G.ui=new UI(G); G.r1=new Round1(G); G.r2=new Round2(G);

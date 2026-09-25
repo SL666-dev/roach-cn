@@ -3,22 +3,24 @@
 "use strict";
 
 // ───────── 재질 ─────────
+// 带 clearcoat 的甲壳材质。手机档 ?cc=0 时换成普通材质（少一层高光，片元更便宜），粗糙度稍降以保留一点光泽
+const phys=o=>{ if(QUALITY.clearcoat) return new THREE.MeshPhysicalMaterial(o); const {clearcoat,clearcoatRoughness,...rest}=o; return new THREE.MeshStandardMaterial(Object.assign(rest,{roughness:Math.max(0.1,(rest.roughness??1)-0.08)})); };
 const M={
   std:(color,o={})=>new THREE.MeshStandardMaterial(Object.assign({color,roughness:0.6,metalness:0},o)),
-  gloss:(color,o={})=>new THREE.MeshPhysicalMaterial(Object.assign({color,roughness:0.3,metalness:0,clearcoat:0.8,clearcoatRoughness:0.3},o)),
+  gloss:(color,o={})=>phys(Object.assign({color,roughness:0.3,metalness:0,clearcoat:0.8,clearcoatRoughness:0.3},o)),
 };
 const MAT={
   // 새 바퀴 모델: 색은 정점에 들어 있고 재질은 광택만 정한다
-  roachShell:new THREE.MeshPhysicalMaterial({color:0xffffff,vertexColors:true,roughness:0.4,metalness:0,clearcoat:0.65,clearcoatRoughness:0.24}),
+  roachShell:phys({color:0xffffff,vertexColors:true,roughness:0.4,metalness:0,clearcoat:0.65,clearcoatRoughness:0.24}),
   roachLimb:new THREE.MeshStandardMaterial({color:0xffffff,vertexColors:true,roughness:0.46}),
-  nymphShell:new THREE.MeshPhysicalMaterial({color:0xffffff,vertexColors:true,roughness:0.5,clearcoat:0.45,clearcoatRoughness:0.35}),
+  nymphShell:phys({color:0xffffff,vertexColors:true,roughness:0.5,clearcoat:0.45,clearcoatRoughness:0.35}),
   nymphLimb:new THREE.MeshStandardMaterial({color:0xffffff,vertexColors:true,roughness:0.6}),
   // 시체: 산 것보다 탁하고 광이 죽는다. 내장은 젖은 광택.
-  corpseShell:new THREE.MeshPhysicalMaterial({color:0xb9ad9f,vertexColors:true,roughness:0.52,clearcoat:0.35,clearcoatRoughness:0.3}),
+  corpseShell:phys({color:0xb9ad9f,vertexColors:true,roughness:0.52,clearcoat:0.35,clearcoatRoughness:0.3}),
   corpseLimb:new THREE.MeshStandardMaterial({color:0xcfc4b8,vertexColors:true,roughness:0.58}),
   charShell:new THREE.MeshStandardMaterial({color:0xffffff,vertexColors:true,roughness:0.86}),
   charLimb:new THREE.MeshStandardMaterial({color:0x4a3f3a,vertexColors:true,roughness:0.85}),
-  goo:new THREE.MeshPhysicalMaterial({color:0xffffff,vertexColors:true,roughness:0.16,clearcoat:1,clearcoatRoughness:0.08}),
+  goo:phys({color:0xffffff,vertexColors:true,roughness:0.16,clearcoat:1,clearcoatRoughness:0.08}),
 
   skin:M.std(0xe9b994,{roughness:0.65}),
   hair:M.std(0x2a1b12,{roughness:0.8}),

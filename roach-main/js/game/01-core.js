@@ -21,8 +21,13 @@ const QS=new URLSearchParams(window.__ROACH_SEARCH ?? location.search);
 const QUALITY=(()=>{
   const q=QS.get('q'), coarse=!!(window.matchMedia&&matchMedia('(pointer: coarse)').matches);
   const mobile=q==='low'?true:q==='high'?false:coarse&&Math.min(screen.width,screen.height)<=600;
+  const dpr=parseFloat(QS.get('dpr'));
   return {
     mobile,
+    // 以下三项只在手机档生效，默认不变，真机对比后再定：?dpr=1.25 像素比上限，?aa=0 关抗锯齿，?cc=0 甲壳去掉 clearcoat
+    dpr:mobile&&dpr>0?Math.min(dpr,1.5):1.5,
+    aa:!(mobile&&QS.get('aa')==='0'),
+    clearcoat:!(mobile&&QS.get('cc')==='0'),
     softShadow:!mobile,            // 手机用 PCF，不用 PCFSoft
     shadowEvery:mobile?2:1,        // 阴影贴图每几帧更新一次
     paintScale:mobile?2/3:1,       // 地面污渍贴图分辨率
