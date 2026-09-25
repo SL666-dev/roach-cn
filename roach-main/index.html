@@ -23,6 +23,12 @@ iframe{display:block;width:100%;height:100%;border:0;background:#efe8dc}
 @keyframes spin{to{transform:rotate(360deg)}}
 #error{position:fixed;z-index:50;inset:auto 16px calc(18px + env(safe-area-inset-bottom));display:none;padding:12px 15px;border-radius:14px;background:rgba(83,25,18,.94);color:#f8f0dc;font:700 13px/1.5 system-ui,"PingFang SC","Microsoft YaHei",sans-serif;text-align:center}
 #error.show{display:block}
+/* 手机竖着拿时提示横屏（游戏暂停），安卓在点“开始”时已尽量锁定横屏 */
+#rotate{position:fixed;inset:0;z-index:70;display:none;place-items:center;align-content:center;gap:18px;padding:24px;background:#1d140c;color:#f3e9cf;font:700 18px/1.6 "Noto Sans SC","PingFang SC",system-ui,sans-serif;text-align:center;touch-action:none}
+body.rotate-on #rotate{display:grid}
+#rotate .phone{width:46px;height:80px;border:4px solid currentColor;border-radius:10px;animation:turn 1.6s ease-in-out infinite}
+@keyframes turn{0%,20%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+#rotate small{display:block;font-size:14px;font-weight:500;opacity:.7}
 </style>
 </head>
 <body>
@@ -140,6 +146,7 @@ iframe{display:block;width:100%;height:100%;border:0;background:#efe8dc}
 
 <div id="boot" aria-hidden="true"></div>
 <div id="error" role="alert"></div>
+<div id="rotate" role="alert"><div class="phone"></div><div>请把手机横过来<small>游戏已暂停，横屏后继续</small></div></div>
 
 <script src="local-pages.js"></script>
 <script>
@@ -214,6 +221,7 @@ async function waitForGame(){
         installLetters();
         if(introActive)holdGameForIntro();
         else if(startWhenReady)beginTreatment();
+        updateRotate();
         boot.classList.add('done');
         setTimeout(()=>boot.remove(),300);
         return;
@@ -414,6 +422,7 @@ function beginTreatment(){
   G.r1.stop();
   G.startRound1();
   gameWindow?.focus();
+  updateRotate();
 }
 function holdGameForIntro(){
   G.paused=true;G.sleep=true;G.ui.hintClear?.();
@@ -422,10 +431,32 @@ introEl.addEventListener('pointerdown',e=>{if(e.target!==introGo)introReveal(tru
 introGo.addEventListener('click',e=>{
   e.preventDefault();
   mailAudio();
+  goLandscape();
   introEl.classList.add('gone');
   setTimeout(()=>{introEl.hidden=true;},360);
   beginTreatment();
 });
+// ───────── 横屏 ─────────
+// 手机：主要指点设备是手指且屏幕短边 ≤ 600（与游戏里的手机档判断一致，?q=low / ?q=high 可强制）
+const PHONE=(()=>{const q=new URLSearchParams(location.search).get('q');if(q==='low')return true;if(q==='high')return false;return !!(window.matchMedia&&matchMedia('(pointer: coarse)').matches)&&Math.min(screen.width,screen.height)<=600;})();
+// 安卓：点“开始”时进入全屏并锁定横屏（必须在点击里调用）。iPhone 的 Safari 不支持，靠竖屏提示。
+function goLandscape(){
+  if(!PHONE)return;
+  const el=document.documentElement, req=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(!req)return;
+  try{Promise.resolve(req.call(el,{navigationUI:'hide'})).then(()=>screen.orientation?.lock?.('landscape')).catch(()=>{});}catch(err){}
+}
+let rotatePaused=false;
+function updateRotate(){
+  const on=PHONE&&!introActive&&innerHeight>innerWidth;
+  document.body.classList.toggle('rotate-on',on);
+  if(!G)return;
+  if(on&&!G.paused){G.paused=true;rotatePaused=true;G.r1.cancel?.();G.input.reset?.();}
+  else if(!on&&rotatePaused){rotatePaused=false;if(!mailOpen&&!labOpen){G.paused=false;G.r1.touch?.();}}
+}
+addEventListener('resize',updateRotate);
+addEventListener('orientationchange',updateRotate);
+
 if(!new URLSearchParams(location.search).get('r')){
   introActive=true;
   introEl.hidden=false;

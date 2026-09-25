@@ -1,4 +1,4 @@
-// 各种屏幕尺寸：开场“开始”按钮可点、手机竖屏提示不压小地图、触屏文案、调试入口
+// 各种屏幕尺寸：开场“开始”按钮可点、手机竖屏提示横屏并暂停、横屏下提示不压小地图、触屏文案、调试入口
 const L=require('./lib.cjs');
 const overlap=(a,b)=>a&&b&&a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
 
@@ -16,8 +16,21 @@ const overlap=(a,b)=>a&&b&&a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top
       t.ok(b.bottom<=b.vh+1,`“开始”按钮在屏幕内（底边 ${Math.round(b.bottom)} / 屏高 ${b.vh}）`);
       if(b.bottom>b.vh+1){ await page.locator('#introGo').scrollIntoViewIfNeeded().catch(()=>{}); }
       await tap('#introGo');
-      await game.waitForFunction(()=>__g.state==='r1'&&!__g.r1.intro,{},{timeout:10000});
+      // 手机竖屏会先提示横屏并暂停，开场动画要等横过来才继续
+      await game.waitForFunction(p=>__g.state==='r1'&&(p||!__g.r1.intro),mobile&&vp.height>vp.width,{timeout:10000});
       t.ok(true,'点“开始”进入游戏');
+      if(mobile&&vp.height>vp.width){
+        // 手机竖屏：提示横屏并暂停；转成横屏后提示消失、继续
+        await page.waitForTimeout(300);
+        const r=await page.evaluate(()=>({on:getComputedStyle(document.getElementById('rotate')).display!=='none',paused:document.querySelector('#gameFrame').contentWindow.__g.paused}));
+        t.ok(r.on&&r.paused,`竖屏时显示“请横屏”并暂停（${JSON.stringify(r)}）`);
+        await page.screenshot({path:L.path.join(L.OUT,`layout-${vp.width}x${vp.height}-rotate.png`)});
+        await page.setViewportSize({width:vp.height,height:vp.width});
+        await page.waitForTimeout(400);
+        const r2=await page.evaluate(()=>({on:getComputedStyle(document.getElementById('rotate')).display!=='none',paused:document.querySelector('#gameFrame').contentWindow.__g.paused}));
+        t.ok(!r2.on&&!r2.paused,`横过来后提示消失并继续（${JSON.stringify(r2)}）`);
+        await game.waitForFunction(()=>!__g.r1.intro,{},{timeout:10000});
+      }
       if(mobile){
         await page.waitForTimeout(500);
         const hints=await game.evaluate(()=>document.getElementById('hint').textContent);
