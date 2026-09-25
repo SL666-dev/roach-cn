@@ -217,22 +217,26 @@ function roachGeos(kind='adult'){
   if(ROACH_GEO[kind]) return ROACH_GEO[kind];
   const pal=ROACH_PAL[kind], nymph=kind==='nymph';
   const body=buildRoachBody(pal,{wings:!nymph});
-  const fem=[],tib=[]; for(let i=0;i<3;i++){ let B=new GeoBuilder(); addFemur(B,i,pal); fem.push(B.build()); B=new GeoBuilder(); addTibia(B,i,pal); tib.push(B.build()); }
-  return ROACH_GEO[kind]={pal,body,fem,tib,ant:antGeo(pal)};
+  // 활동 중인 바퀴의 다리는 무릎을 서 있는 각도로 굳힌 한 덩어리(좌우 따로), 더듬이는 세 마디를 굳힌 한 가닥 — 한 마리 19개 → 9개 메시
+  const leg={}; for(const side of [1,-1]) for(let i=0;i<3;i++) leg[side*(i+1)]=legWholeGeo(i,side*LEG_DEF[i].ky,LEG_DEF[i].knee,pal);
+  return ROACH_GEO[kind]={pal,body,leg,ant:antennaGeo(pal)};
 }
-// 한 다리 전체(넓적다리+종아리)를 무릎 각도 하나로 굳힌 모양 — 시체용
+// 한 다리 전체(넓적다리+종아리)를 무릎 각도 하나로 굳힌 모양 — 시체용, 활동 중인 바퀴용
 function legWholeGeo(i,ky,kz,pal=ROACH_PAL.adult){ const B=new GeoBuilder(); addFemur(B,i,pal); addTibia(B,i,pal,new THREE.Matrix4().makeTranslation(LEG_DEF[i].fl,0,0).multiply(mtx(0,0,0,0,ky,kz))); return B.build(); }
+// 더듬이 세 마디(마디마다 0.38 길이, -0.1 rad 휨, 끝으로 갈수록 가늘게)를 한 가닥으로
+function antennaGeo(pal){ const seg=antGeo(pal), B=new GeoBuilder(), acc=new THREE.Matrix4();
+  for(let i=0;i<3;i++){ acc.multiply(new THREE.Matrix4().makeTranslation(0,i?0.38:0,0)).multiply(new THREE.Matrix4().makeRotationX(-0.1));
+    B.add(seg,null,acc.clone().multiply(mtx(0,0.19,0,0,0,0,1-i*0.25,1,1-i*0.25))); }
+  seg.dispose(); return B.build(); }
 
 function makeRoach(kind='adult'){
   const GS=roachGeos(kind), nymph=kind==='nymph';
   const shell=nymph?MAT.nymphShell:MAT.roachShell, limb=nymph?MAT.nymphLimb:MAT.roachLimb;
   const g=new THREE.Group(); const L=ROACH_L; const parts={legs:[],ants:[]};
   parts.body=new THREE.Mesh(GS.body,shell); parts.body.castShadow=true; parts.body.receiveShadow=true; g.add(parts.body);
-  for(const s of [1,-1]){ const base=new THREE.Group(); base.position.set(s*0.032,0.052,0.462); base.rotation.order='YXZ'; base.rotation.set(1.25,s*0.42,0); g.add(base); let parent=base; const segs=[];
-    for(let i=0;i<3;i++){ const seg=new THREE.Group(); const m=new THREE.Mesh(GS.ant,limb); m.position.y=0.19; m.scale.set(1-i*0.25,1,1-i*0.25); seg.add(m); seg.position.y=i?0.38:0; seg.rotation.x=-0.1; parent.add(seg); parent=seg; segs.push(seg); }
-    parts.ants.push({base,segs,s}); }
+  for(const s of [1,-1]){ const base=new THREE.Group(); base.position.set(s*0.032,0.052,0.462); base.rotation.order='YXZ'; base.rotation.set(1.25,s*0.42,0); g.add(base); base.add(new THREE.Mesh(GS.ant,limb)); parts.ants.push({base,s}); }
   for(const s of [1,-1]) LEG_DEF.forEach((d,i)=>{ const hip=new THREE.Group(); hip.position.set(s*0.13,HIP_Y,d.z); g.add(hip); const fem=new THREE.Group(); hip.add(fem);
-    const fm=new THREE.Mesh(GS.fem[i],limb); fem.add(fm); const knee=new THREE.Group(); knee.position.x=d.fl; fem.add(knee); const tm=new THREE.Mesh(GS.tib[i],limb); knee.add(tm); parts.legs.push({hip,fem,knee,s,i,d}); });
+    fem.add(new THREE.Mesh(GS.leg[s*(i+1)],limb)); parts.legs.push({hip,fem,s,i,d}); });
   g.scale.setScalar(L);
   const st={phase:rand(TAU),antT:rand(TAU),dead:0};
   function pose(speedNorm,dt,dead=0){
@@ -241,10 +245,8 @@ function makeRoach(kind='adult'){
       const yw=d.yaw-sw*amp*(1-dead)+dead*0.25*(lg.i-1);
       lg.hip.rotation.y=lg.s>0?(yw-Math.PI/2):(1.5*Math.PI-yw);
       const lift=Math.max(0,sw)*0.45*speedNorm*(1-dead);
-      lg.fem.rotation.z=(LEG_ELEV+lift)*(1-dead)+dead*0.12;
-      lg.knee.rotation.z=(d.knee-lift*0.2)*(1-dead)-0.35*dead;
-      lg.knee.rotation.y=lg.s*d.ky*(1-dead*0.5); }
-    for(const a of parts.ants){ const w=Math.sin(st.antT*1.7+a.s)*0.22; a.base.rotation.set(1.25+Math.sin(st.antT+a.s*2)*0.12,a.s*(0.42+w),0); a.segs.forEach((sg,i)=>{ sg.rotation.x=-0.1+Math.sin(st.antT*2.3+i+a.s)*0.1; }); }
+      lg.fem.rotation.z=(LEG_ELEV+lift)*(1-dead)+dead*0.12; }
+    for(const a of parts.ants){ const w=Math.sin(st.antT*1.7+a.s)*0.22; a.base.rotation.set(1.25+Math.sin(st.antT+a.s*2)*0.12+Math.sin(st.antT*2.3+a.s)*0.06,a.s*(0.42+w),0); }
     g.scale.set(L*(1+dead*0.3),L*(1-dead*0.7),L);
   }
   pose(0,0);
