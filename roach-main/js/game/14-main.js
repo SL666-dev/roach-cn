@@ -241,8 +241,24 @@ G.advance=function(T,step=1/60){
 
 
 // 루프
+// ?debug：屏幕下方显示帧率、最慢一帧、draw call、三角形和画质，真机调性能用。每 0.5 秒刷新，draw call/三角形取这段时间的最大值（阴影隔帧更新时两帧不同）。
+G.debug=QS.has('debug')?(()=>{
+  const el=document.createElement('div'); el.id='dbg';
+  el.style.cssText='position:fixed;left:50%;bottom:calc(4px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99;padding:3px 8px;border-radius:6px;background:rgba(0,0,0,.62);color:#fff;font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;white-space:pre;pointer-events:none';
+  document.body.appendChild(el);
+  let n=0,t0=performance.now(),prev=t0,worst=0,work=0,calls=0,tris=0;
+  return (ms)=>{
+    const t=performance.now(), I=G.renderer.info.render; n++; work+=ms; worst=Math.max(worst,t-prev); prev=t; calls=Math.max(calls,I.calls); tris=Math.max(tris,I.triangles);
+    if(t-t0<500) return;
+    const c=G.renderer.domElement, alive=G.corpses.list.reduce((k,o)=>k+(o&&o.alive?1:0),0);
+    el.textContent=`${(n*1000/(t-t0)).toFixed(0)} fps  最慢 ${worst.toFixed(0)}ms  JS ${(work/n).toFixed(1)}ms  draw ${calls}  三角 ${(tris/1e4).toFixed(1)}万
+`+
+      `${QUALITY.mobile?'手机档':'电脑档'} ${c.width}×${c.height} ×${G.renderer.getPixelRatio()}${QUALITY.aa?'':' 无AA'}${QUALITY.clearcoat?'':' 无cc'}  尸体 ${alive}/${G.corpses.cap}`;
+    n=0; t0=t; worst=0; work=0; calls=0; tris=0;
+  };
+})():null;
 let last=now(); const _off=new THREE.Vector3();
-function frame(){ requestAnimationFrame(frame); if(G.sleep){ last=now(); return; } const t=now(); let dt=Math.min(0.05,t-last); last=t; G.time+=dt;
+function frame(){ requestAnimationFrame(frame); if(G.sleep){ last=now(); return; } const t=now(), tw=performance.now(); let dt=Math.min(0.05,t-last); last=t; G.time+=dt;
   if(G.state==='rank') G.rankT+=dt;
   
   
@@ -260,5 +276,6 @@ if(!G.paused){
   if(G.shakeAmt>0.001){ const a=G.shakeAmt*0.02; _off.set(rand(-a,a),rand(-a,a),rand(-a,a)); G.camera.position.add(_off); G.shakeAmt*=Math.exp(-9*dt); }
   if(QUALITY.shadowEvery>1&&G.frameN++%QUALITY.shadowEvery===0) G.renderer.shadowMap.needsUpdate=true;
   G.paint.flush(G.time); G.renderer.render(G.scene,G.camera);
+  if(G.debug) G.debug(performance.now()-tw);
 }
 frame();
