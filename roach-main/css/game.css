@@ -27,6 +27,9 @@ button{font-family:inherit;color:inherit;border:0;background:none;padding:0;marg
 .slot:active{transform:translateY(2px)}
 .slot[data-key]::after{content:attr(data-key);position:absolute;right:5px;top:3px;font-size:9px;line-height:1;font-weight:700;opacity:.45}
 @media (hover:none){ .slot[data-key]::after{display:none} }
+/* 触屏：工具按钮加大到 64×48，手指不容易点偏 */
+@media (pointer:coarse){ .slot{width:64px;height:48px;font-size:14px} }
+@media (pointer:coarse) and (max-height:540px){ #wcol{grid-template-columns:repeat(2,64px)} }
 #kills{position:fixed;left:calc(14px + env(safe-area-inset-left));top:calc(14px + env(safe-area-inset-top));font-family:var(--serif);font-size:30px;line-height:1;color:var(--ink);text-shadow:0 1px 0 rgba(255,255,255,.5);opacity:0;transition:opacity .4s}
 #kills.show{opacity:.75}
 #kills small{font-size:15px;margin-left:3px}

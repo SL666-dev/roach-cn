@@ -57,7 +57,14 @@ const pct=(a,b)=>b?`${a>=b?'+':''}${((a-b)/b*100).toFixed(0)}%`:'';
       const pan=await game.evaluate(c=>({moved:Math.hypot(__g.r1.cam.x-c.x,__g.r1.cam.z-c.z),hits:__hits}),cam0);
       t.ok(pan.moved>0.05,`双指拖动移动画面（${pan.moved.toFixed(3)} 米）`);
       result.panHits=pan.hits;
-      t.info(`双指拖动期间误打出 ${pan.hits} 次工具`);
+      t.eq(pan.hits,0,'双指拖动期间不误打出工具');
+      // 单指轻点照常打出；两指同时轻点（不拖动）各打一次
+      const tapHits=async(pts)=>{ await game.evaluate(()=>{__hits=0;}); await touch(cdp,'touchStart',pts); await page.waitForTimeout(20); await touch(cdp,'touchEnd',[]); await page.waitForTimeout(500); return game.evaluate(()=>__hits); };
+      t.eq(await tapHits([[W*0.45,H*0.5,1]]),1,'单指轻点打出一次');
+      await page.waitForTimeout(600);
+      const holdHits=await game.evaluate(()=>__hits); await touch(cdp,'touchStart',[[W*0.45,H*0.5,1]]); await page.waitForTimeout(300);
+      t.eq(await game.evaluate(h=>__hits-h,holdHits),1,'单指按住不放也会打出（等待后触发）'); await touch(cdp,'touchEnd',[]); await page.waitForTimeout(600);
+      t.eq(await tapHits([[W*0.35,H*0.5,1],[W*0.55,H*0.5,2]]),2,'两指同时轻点各打一次');
 
       // 第二阶段：左手摇杆 + 右手转视角同时进行
       await game.evaluate(()=>__g.toRound2());
