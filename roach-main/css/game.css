@@ -19,7 +19,10 @@ button{font-family:inherit;color:inherit;border:0;background:none;padding:0;marg
 /* 1라운드 UI */
 #r1ui{position:fixed;inset:0;display:none;pointer-events:none}
 #r1ui>*{pointer-events:auto}
-#wcol{position:fixed;right:calc(10px + var(--sa-r,env(safe-area-inset-right)));top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px}
+/* 工具栏在右上角“要停下来吗？”（高 ≤ 56px）下方的区域里竖直居中，放不下时从顶部排起，不和它重叠。空隙不挡点击 */
+#wcol{position:fixed;right:calc(10px + var(--sa-r,env(safe-area-inset-right)));top:calc(64px + var(--sa-t,env(safe-area-inset-top)));bottom:calc(12px + var(--sa-b,env(safe-area-inset-bottom)));display:flex;flex-direction:column;justify-content:safe center;align-content:safe center;gap:8px;pointer-events:none}
+#r1ui>#wcol{pointer-events:none}
+#wcol .slot{pointer-events:auto}
 #bcol{position:fixed;left:calc(10px + var(--sa-l,env(safe-area-inset-left)));bottom:calc(12px + var(--sa-b,env(safe-area-inset-bottom)));display:flex;flex-direction:column;gap:8px}
 @media (max-height:540px){ #wcol{display:grid;grid-template-columns:repeat(2,60px)} }
 .slot{width:60px;height:40px;border-radius:12px;background:var(--ivory);color:var(--ink);font-size:13px;font-weight:700;letter-spacing:-.02em;box-shadow:0 2px 0 var(--edge),0 4px 10px rgba(80,50,20,.28);display:grid;place-items:center;position:relative;transition:transform .08s,box-shadow .08s;white-space:nowrap}
@@ -31,13 +34,15 @@ button{font-family:inherit;color:inherit;border:0;background:none;padding:0;marg
 /* 触屏：工具按钮加大到 64×48，手指不容易点偏 */
 @media (pointer:coarse){ .slot{width:64px;height:48px;font-size:14px} }
 @media (pointer:coarse) and (max-height:540px){ #wcol{grid-template-columns:repeat(2,64px)} }
-#kills{position:fixed;left:calc(14px + var(--sa-l,env(safe-area-inset-left)));top:calc(14px + var(--sa-t,env(safe-area-inset-top)));font-family:var(--serif);font-size:30px;line-height:1;color:var(--ink);text-shadow:0 1px 0 rgba(255,255,255,.5);opacity:0;transition:opacity .4s}
-#kills.show{opacity:.75}
+/* 更矮（横屏手机 + 浏览器地址栏）：9 个工具排成 3 列，让出右上角 */
+@media (pointer:coarse) and (max-height:400px){ #wcol{grid-template-columns:repeat(3,64px)} }
+#kills{position:fixed;left:calc(14px + var(--sa-l,env(safe-area-inset-left)));top:calc(14px + var(--sa-t,env(safe-area-inset-top)));font-family:var(--serif);font-size:30px;line-height:1;color:var(--ink);opacity:0;transition:opacity .4s;z-index:5;padding:6px 12px 5px;border-radius:999px;background:rgba(251,244,228,.94);box-shadow:0 2px 0 var(--edge),0 4px 10px rgba(80,50,20,.28)}
+#kills.show{opacity:1}
 #kills small{font-size:15px;margin-left:3px}
 
 #quit{position:fixed;top:calc(14px + var(--sa-t,env(safe-area-inset-top)));right:calc(14px + var(--sa-r,env(safe-area-inset-right)));padding:12px 18px;border-radius:999px;background:var(--ivory);color:var(--ink);font-size:15px;font-weight:600;line-height:1;box-shadow:0 2px 0 var(--edge),0 4px 12px rgba(80,50,20,.28);opacity:0;transition:opacity .7s;pointer-events:none}
 #quit.show{opacity:1;pointer-events:auto}
-#confirm{position:fixed;top:calc(14px + var(--sa-t,env(safe-area-inset-top)));right:calc(14px + var(--sa-r,env(safe-area-inset-right)));display:none;flex-direction:column;gap:10px;align-items:flex-end}
+#confirm{position:fixed;top:calc(14px + var(--sa-t,env(safe-area-inset-top)));right:calc(14px + var(--sa-r,env(safe-area-inset-right)));display:none;flex-direction:row;gap:10px;align-items:center}
 #confirm.show{display:flex}
 #confirm button{padding:13px 20px;border-radius:999px;font-size:16px;font-weight:600;line-height:1;box-shadow:0 2px 0 var(--edge),0 4px 12px rgba(80,50,20,.28)}
 #confirm .stop{background:var(--ink);color:var(--ivory)}

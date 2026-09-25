@@ -181,6 +181,37 @@ const pct=(a,b)=>b?`${a>=b?'+':''}${((a-b)/b*100).toFixed(0)}%`:'';
     t.ok(!rk,'结算页各部分互不重叠');
     await shot('rank');
   });
+  // 第一阶段右上角：“要停下来吗？”及确认按钮不能盖住工具按钮；左上角计数始终在最上层、压在深色模型上也看得清
+  for(const vp of [{width:915,height:412},{width:915,height:360},{width:844,height:320}]){
+    await L.run(`第一阶段角落按钮 ${vp.width}×${vp.height}`,{viewport:vp,touch:true,mobile:true,dpr:2.625},async(t,{page})=>{
+      const game=await L.openGame(page);
+      await L.startFromIntro(page,game);
+      await L.autoCloseLetters(page);
+      const check=async(label)=>{
+        const r=await game.evaluate(()=>{const b=e=>{const r=e.getBoundingClientRect();return {l:r.left,t:r.top,r:r.right,b:r.bottom,name:e.textContent.trim()};};
+          const vis=e=>getComputedStyle(e).display!=='none'&&getComputedStyle(e).opacity!=='0';
+          const top=[...document.querySelectorAll('#quit,#confirm button')].filter(e=>vis(e)&&vis(e.parentElement)).map(b);
+          const slots=[...document.querySelectorAll('#wcol .slot,#bcol .slot')].map(b);
+          const hit=[];for(const a of top)for(const s of slots)if(a.l<s.r&&s.l<a.r&&a.t<s.b&&s.t<a.b)hit.push(a.name+'×'+s.name);
+          return {n:top.length,hit,low:Math.max(...slots.map(s=>s.b))};});
+        t.ok(r.n>0&&!r.hit.length,`${label}不盖住工具按钮（${r.hit.join('，')||'无重叠'}）`);
+        t.ok(r.low<=vp.height+1,`工具按钮都在屏幕内（最低 ${Math.round(r.low)} / ${vp.height}）`);
+      };
+      await game.evaluate(()=>{__g.ui.showQuit(true);});
+      await page.waitForTimeout(800);
+      await check('“要停下来吗？”');
+      await game.evaluate(()=>{__g.ui.quit.style.transition='none';__g.ui.quit.classList.remove('show');__g.ui.confirm.classList.add('show');});
+      await check('“停下来 / 继续”');
+      await game.evaluate(()=>{__g.ui.confirm.classList.remove('show');__g.ui.showQuit(true);});
+      // 计数：把拖鞋模型挪到计数底下，计数仍在最上层且有自己的底色
+      await game.evaluate(()=>{__g.ui.setKills(39);});
+      await page.waitForTimeout(500);
+      const k=await game.evaluate(()=>{const e=document.getElementById('kills'),r=e.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;const top=document.elementFromPoint(x,y);const cs=getComputedStyle(e);const a=(cs.backgroundColor.match(/[\d.]+/g)||[0,0,0,0]).map(Number);return {onTop:e.contains(top),opacity:+cs.opacity,bgAlpha:a.length>3?a[3]:1,z:cs.zIndex,text:e.textContent};});
+      t.ok(k.onTop,`计数在最上层（${k.text}）`);
+      t.ok(k.opacity>=0.95&&k.bgAlpha>=0.8,`计数不透明且有底色，压在拖鞋上也看得清（不透明度 ${k.opacity}，底色 ${k.bgAlpha}）`);
+      await page.screenshot({path:L.path.join(L.OUT,`mobile-corners-${vp.width}x${vp.height}.png`)});
+    });
+  }
   await L.run('电脑档不受手机开关影响',{},async(t,{page})=>{
     const game=await L.openGame(page,'?r=2&dpr=1.25&aa=0&cc=0');
     await page.waitForTimeout(800);
