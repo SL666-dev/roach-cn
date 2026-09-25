@@ -8,13 +8,6 @@ const M={
   gloss:(color,o={})=>new THREE.MeshPhysicalMaterial(Object.assign({color,roughness:0.3,metalness:0,clearcoat:0.8,clearcoatRoughness:0.3},o)),
 };
 const MAT={
-  roachBody:M.gloss(0x3a1e0c,{roughness:0.55,clearcoat:0.35,clearcoatRoughness:0.4}),
-  roachWing:M.gloss(0x5c3312,{roughness:0.45,clearcoat:0.45,clearcoatRoughness:0.35}),
-  roachPro:M.gloss(0x2b160a,{roughness:0.5,clearcoat:0.3,clearcoatRoughness:0.4}),
-  roachRim:M.std(0x7d5f30,{roughness:0.65}),
-  roachSeam:M.std(0x160b04,{roughness:0.9}),
-  corpse:M.std(0xffffff,{roughness:0.92}),
-  corpseWing:M.std(0xffffff,{roughness:0.8}),
   // 새 바퀴 모델: 색은 정점에 들어 있고 재질은 광택만 정한다
   roachShell:new THREE.MeshPhysicalMaterial({color:0xffffff,vertexColors:true,roughness:0.4,metalness:0,clearcoat:0.65,clearcoatRoughness:0.24}),
   roachLimb:new THREE.MeshStandardMaterial({color:0xffffff,vertexColors:true,roughness:0.46}),
@@ -26,12 +19,6 @@ const MAT={
   charShell:new THREE.MeshStandardMaterial({color:0xffffff,vertexColors:true,roughness:0.86}),
   charLimb:new THREE.MeshStandardMaterial({color:0x4a3f3a,vertexColors:true,roughness:0.85}),
   goo:new THREE.MeshPhysicalMaterial({color:0xffffff,vertexColors:true,roughness:0.16,clearcoat:1,clearcoatRoughness:0.08}),
-  roachLeg:M.std(0x2c1809,{roughness:0.75}),
-
-  nymphBody:M.gloss(0xeee6d2,{roughness:0.6,clearcoat:0.2,clearcoatRoughness:0.5}),
-  nymphPlate:M.std(0xd8c7a9,{roughness:0.72}),
-  nymphMark:M.std(0x9a7b5b,{roughness:0.82}),
-  nymphLeg:M.std(0x9b8064,{roughness:0.8}),
 
   skin:M.std(0xe9b994,{roughness:0.65}),
   hair:M.std(0x2a1b12,{roughness:0.8}),

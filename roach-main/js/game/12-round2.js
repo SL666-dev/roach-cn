@@ -229,9 +229,6 @@ this.G.room.blanket.visible=true;
     // 현재 세대에 맞는 알집 시간을 저장한다.
     this.eggT=eggTimeForGen(this.gen);
 
-    this.assistW=0;
-    this.lookTgt=null;
-    this.lookIdle=9;
     this.eggDanger=false;
     this.hatch=null;
     this.genT=0;
@@ -1517,11 +1514,9 @@ clearTraps(){
 
   playCamera(dt){ const P=this.p, G=this.G, inp=G.input;
     // 카메라는 플레이어가 시선을 조작할 때만 돈다. 사람·무기·진행 방향을 저절로 따라가거나 고개를 되돌리지 않는다.
-    const lk=inp.consumeLook(); const [lx,ly]=inp.lookKeys(); let moved=false;
-    if(lk.dx||lk.dy){ this.camYaw-=lk.dx*0.0065; this.camPitch=clamp(this.camPitch-lk.dy*0.0055,-0.3,1.25); moved=true; }
-    if(lx||ly){ this.camYaw-=lx*1.9*dt; this.camPitch=clamp(this.camPitch+ly*1.5*dt,-0.3,1.25); moved=true; }
-    this.lookIdle=moved||inp.lookOn?0:this.lookIdle+dt;
-    this.assistW=0; this.lookTgt=null;
+    const lk=inp.consumeLook(); const [lx,ly]=inp.lookKeys();
+    if(lk.dx||lk.dy){ this.camYaw-=lk.dx*0.0065; this.camPitch=clamp(this.camPitch-lk.dy*0.0055,-0.3,1.25); }
+    if(lx||ly){ this.camYaw-=lx*1.9*dt; this.camPitch=clamp(this.camPitch+ly*1.5*dt,-0.3,1.25); }
     this.applyCam(P.x,P.z,this.camYaw,this.camPitch,0,null);
     this.roach.g.visible=!this.camPeek;   // 바닥에 붙어 내다볼 때는 카메라가 내 몸 속이라 내 몸을 숨긴다
   }
