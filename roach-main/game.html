@@ -474,8 +474,8 @@ class FloorPaint{
   }
   px(x,z){ return [(x+2)*this.ppm,(z+3)*this.ppm]; }
   clear(){ this.g.clearRect(0,0,this.W,this.H); this.dirty=true; }
-  // 텍스처 업로드는 비싸다. 얼룩이 생긴 프레임에만, 그것도 초당 20회까지만 올린다.
-  flush(t){ if(!this.dirty) return; if(t-this.lastFlush<0.05) return; this.lastFlush=t; this.tex.needsUpdate=true; this.dirty=false; }
+  // 텍스처 업로드는 비싸다. 얼룩이 생긴 프레임에만, 그것도 초당 10회까지만 올린다.（768×1152 一次约 3.5MB）
+  flush(t){ if(!this.dirty) return; if(t-this.lastFlush<0.1) return; this.lastFlush=t; this.tex.needsUpdate=true; this.dirty=false; }
   gooColors(L){
     const h=lerp(47,42,L), s=lerp(42,48,L), l=lerp(86,80,L);
     return { core:`hsl(${h},${s}%,${l}%)`, coreA:(a)=>`hsla(${h},${s}%,${l}%,${a})`, rim:`hsl(${h},${s-10}%,${l+6}%)`, goo:(a)=>`hsla(49,46%,93%,${a})`, white:(a)=>`hsla(45,30%,97%,${a})`, gut:(a)=>`hsla(24,52%,15%,${a})`, red:(a)=>`hsla(20,55%,18%,${a})` };
@@ -795,6 +795,7 @@ function gridGeo(U,Vn,fn,wrapV=false,flip=false){
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setIndex(idx); return g;
 }
 const UNIT_SPH=new THREE.SphereGeometry(1,12,9);
+const UNIT_SPH_LO=new THREE.SphereGeometry(1,8,6);   // 尸体上的内脏团
 const UNIT_SPH_S=new THREE.SphereGeometry(1,9,7);
 const UNIT_CONE=new THREE.ConeGeometry(1,1,4);
 // +x 방향으로 뻗은 가늘어지는 원통 (다리·수염·꼬리털)
@@ -839,6 +840,8 @@ function pronotumGeo(pal){
   _proGeo.set(pal,g); return g;
 }
 // 몸 조각들. o: {M, warp, post, ...}
+// 网格细分系数：活蟑螂用 1；尸体在俯视下只有几十像素，生成尸体时临时调低
+let GEO_LOD=1;
 function addPronotum(B,pal,o={}){
   // 옆과 앞 가장자리는 가슴을 덮으며 아래로 휜다
   const droop=(w,i)=>{ const lx=w.x/0.195, lz=(w.z-0.30)/0.165; w.y-=0.03*lx*lx+0.022*Math.max(0,lz)*Math.max(0,lz); if(o.warp) o.warp(w,i); };
@@ -861,7 +864,7 @@ function addThorax(B,pal,o={}){
 function addAbdomen(B,pal,o={}){
   const C=palRGB(pal), v0=o.v0??0, v1=o.v1??1, zf=0.1, zr=-0.56, SEG=6.2;
   const prof=v=>{ const w=Math.max(0.035,0.205*Math.pow(Math.max(0,Math.sin(Math.PI*Math.min(1,0.2+v*0.82))),0.55)); return {w,hd:0.052*(1-0.55*v*v),hv:0.05*(1-0.5*v*v)}; };
-  const U=Math.max(3,Math.round(22*(v1-v0))), Vn=18;
+  const U=Math.max(3,Math.round(22*(v1-v0)*GEO_LOD)), Vn=GEO_LOD<1?14:18;
   const g=gridGeo(U,Vn,(uu,j)=>{ const v=lerp(v0,v1,uu), z=lerp(zf,zr,v), f=(v*SEG)%1; const {w,hd,hv}=prof(v); const lip=1+0.05*sstep(0.72,0.94,f)-0.06*sstep(0.96,1,f);
     const th=j*TAU, co=Math.cos(th), si=Math.sin(th);
     const x=w*lip*Math.sign(co)*Math.pow(Math.abs(co),2/2.4), y=si>=0?hd*lip*Math.pow(si,2/2.0):-hv*Math.pow(-si,2/3.2);
@@ -883,7 +886,7 @@ function addWing(B,pal,side,o={}){
     // 안쪽 절반은 평평한 등, 바깥쪽은 옆구리로 휘어 내려간다
     const y=yb+0.01*Math.cos(Math.PI*0.5*clamp((v-0.3)/0.7,0,1))-0.052*Math.pow(sstep(0.5,1,v),1.25)-0.004*sstep(0.12,0,v)+lift*(1-v);
     return [side*x,y,z]; };
-  const U=Math.max(4,Math.round(22*uMax)), Vn=10;
+  const U=Math.max(4,Math.round(22*uMax*GEO_LOD)), Vn=GEO_LOD<1?7:10;
   const tear=o.tear||0;
   const top=gridGeo(U,Vn,(uu,v)=>{ const u=uu*uMax; const p=shape(u,v); return p; },false,side>0);
   const bot=gridGeo(U,Vn,(uu,v)=>{ const u=uu*uMax; const p=shape(u,v); p[1]-=T*(1-0.6*v); return p; },false,side<0);
@@ -1034,18 +1037,22 @@ function makeHuman(){
 const CORPSE_VARIANTS={crushed:8,belly:4,burnt:4};
 const GOO_RGB=[0xEFE6CF,0xE6D9B6,0xDCC89A,0xF5EFDF,0xD2BC88].map(rgb);
 const GUT_RGB=[rgb(0x6e3c1a),rgb(0x3a1d0b),rgb(0xa06a3a)];
-function tubeOn(B,pts,r,colFn,M){ const curve=new THREE.CatmullRomCurve3(pts.map(p=>V3(p[0],p[1],p[2]))); const TS=Math.max(8,pts.length*6); const g=new THREE.TubeGeometry(curve,TS,r,6,false); B.add(g,(v,w,i)=>colFn(Math.floor(i/7)/TS),null,null,M); }
+// seg: 每个控制点分几段，rad: 截面边数。内脏在俯视下只有几个像素宽，用粗一些的网格即可
+function tubeOn(B,pts,r,colFn,M,seg=6,rad=6){ const curve=new THREE.CatmullRomCurve3(pts.map(p=>V3(p[0],p[1],p[2]))); const TS=Math.max(8,pts.length*seg); const g=new THREE.TubeGeometry(curve,TS,r,rad,false); B.add(g,(v,w,i)=>colFn(Math.floor(i/(rad+1))/TS),null,null,M); }
 // 더듬이: 바닥에 늘어진 채 굳은 곡선
 function corpseAntennae(B,R,M,y0,broken){
   const C=palRGB(ROACH_PAL.adult);
   for(const s of [1,-1]){ const pts=[[s*0.03,y0,0.46]]; let x=s*0.03,z=0.46,a=s*R(0.1,0.7),y=y0; const n=broken&&s===1?3:7;
     for(let k=0;k<n;k++){ a+=R(-0.5,0.5); x+=Math.sin(a)*0.16; z+=Math.cos(a)*0.16; y=Math.max(0.006,y-0.03); pts.push([x,y,z]); }
-    tubeOn(B,pts,0.0055,(t)=>((t*n*3)%1<0.5)?C.ant:C.ant2,M); }
+    tubeOn(B,pts,0.0055,(t)=>((t*n*3)%1<0.5)?C.ant:C.ant2,M,GEO_LOD<1?4:6,GEO_LOD<1?4:6); }
 }
 function lumpWarp(seed,amp){ return (w)=>{ const k=1+(vnoise(w.x*38+seed,w.y*38,w.z*38)-0.5)*amp; w.x*=k; w.z*=k; }; }
 function addGooBlob(B,R,x,z,rx,ry,rz,colIdx,y0=0){ const c0=GOO_RGB[colIdx%GOO_RGB.length], c1=GOO_RGB[(colIdx+2)%GOO_RGB.length], sd=R(0,99);
-  B.add(UNIT_SPH,(v)=>rgbMix(c0,c1,vnoise(v.x*3+sd,v.y*3,v.z*3)),mtx(x,y0+Math.max(0.003,ry*0.55),z,0,R(0,TAU),0,rx,ry,rz),(w)=>{ const k=1+(vnoise(w.x*30+sd,w.y*30,w.z*30)-0.5)*0.34; w.x=x+(w.x-x)*k; w.z=z+(w.z-z)*k; w.y=Math.max(0.002,w.y); }); }
+  B.add(UNIT_SPH_LO,(v)=>rgbMix(c0,c1,vnoise(v.x*3+sd,v.y*3,v.z*3)),mtx(x,y0+Math.max(0.003,ry*0.55),z,0,R(0,TAU),0,rx,ry,rz),(w)=>{ const k=1+(vnoise(w.x*30+sd,w.y*30,w.z*30)-0.5)*0.34; w.x=x+(w.x-x)*k; w.z=z+(w.z-z)*k; w.y=Math.max(0.002,w.y); }); }
 function buildCorpseGeo(mode,v){
+  GEO_LOD=0.65; try{ return buildCorpseGeoLod(mode,v); } finally{ GEO_LOD=1; }
+}
+function buildCorpseGeoLod(mode,v){
   const R0=mulberry(v*7919+(mode==='crushed'?11:mode==='belly'?23:37)), R=(a,b)=>a+(b-a)*R0(), pick=a=>a[Math.floor(R0()*a.length)];
   const pal=ROACH_PAL.adult, shell=new GeoBuilder(), goo=new GeoBuilder(); let gooN=0; const legs=[];
   const legYaw=(i,s,dev)=>{ const yw=LEG_DEF[i].yaw+dev; return s>0?(yw-Math.PI/2):(1.5*Math.PI-yw); };
@@ -1089,8 +1096,8 @@ function buildCorpseGeo(mode,v){
     addGooBlob(goo,R,Math.sin(ha)*hd*0.5,0.36+Math.cos(ha)*hd*0.5,R(0.04,0.07),R(0.014,0.024),R(0.04,0.06),1);
     // 소화관: 틈에서 삐져나와 늘어진다
     for(let gI=0;gI<2;gI++){ const [sx,sz]=splits[gI]; const pts=[[sx,0.03,sz+0.04]]; let x=sx, z=sz, a=burstA+R(-0.9,0.9); for(let k=0;k<6;k++){ a+=R(-1,1); x+=Math.cos(a)*R(0.04,0.08); z+=Math.sin(a)*R(0.03,0.07); pts.push([x,R(0.03,0.05),z]); }
-      tubeOn(goo,pts,R(0.013,0.019),(t)=>{ const q=vnoise(t*9,gI*5,3); return q<0.4?GUT_RGB[1]:q>0.72?GUT_RGB[2]:GUT_RGB[0]; }); }
-    for(let k=0;k<Math.floor(R(4,7));k++){ const [sx,sz]=splits[k%2]; const pts=[]; let x=sx+R(-0.08,0.08), z=sz+R(-0.05,0.05), a=R(0,TAU); for(let j=0;j<5;j++){ a+=R(-1.6,1.6); x+=Math.cos(a)*0.03; z+=Math.sin(a)*0.03; pts.push([x,R(0.03,0.045),z]); } tubeOn(goo,pts,0.0035,()=>rgb(0xd8b04a)); }
+      tubeOn(goo,pts,R(0.013,0.019),(t)=>{ const q=vnoise(t*9,gI*5,3); return q<0.4?GUT_RGB[1]:q>0.72?GUT_RGB[2]:GUT_RGB[0]; },null,3,4); }
+    for(let k=0;k<Math.floor(R(4,7));k++){ const [sx,sz]=splits[k%2]; const pts=[]; let x=sx+R(-0.08,0.08), z=sz+R(-0.05,0.05), a=R(0,TAU); for(let j=0;j<5;j++){ a+=R(-1.6,1.6); x+=Math.cos(a)*0.03; z+=Math.sin(a)*0.03; pts.push([x,R(0.03,0.045),z]); } tubeOn(goo,pts,0.0035,()=>rgb(0xd8b04a),null,3,3); }
     for(let k=0;k<Math.floor(R(10,16));k++){ const [sx,sz]=splits[k%2]; const a=R(0,TAU), rr=R(0.02,0.18); const r=R(0.008,0.016); goo.add(UNIT_SPH_S,GOO_RGB[3],mtx(sx+Math.cos(a)*rr+bdx*0.05,R(0.03,0.045),sz+Math.sin(a)*rr*0.7+bdz*0.05,0,0,0,r,r*0.8,r)); }
     // 다리: 몸에 붙은 채 사방으로 뻗고, 몇 개는 꺾여 들리고, 한두 개는 떨어져 나간다
     const lost=new Set(); if(R0()<0.7) lost.add(Math.floor(R(0,6))); if(R0()<0.3) lost.add(Math.floor(R(0,6)));
@@ -1129,9 +1136,13 @@ class Corpses{
     this.scene=scene; this.cap=cap; this.list=[]; this.head=0; this.kinds={}; this.legMesh={}; this.twitching=new Set();
     this.d=new THREE.Object3D(); this.m4=new THREE.Matrix4(); this.m5=new THREE.Matrix4(); this.zero=new THREE.Matrix4().makeScale(0,0,0);
   }
-  mkMesh(geo,mat,cap){ const m=new THREE.InstancedMesh(geo,mat,cap); m.count=0; m.visible=false; m.frustumCulled=false; m.castShadow=true; m.receiveShadow=true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.userData.free=[]; m.userData.top=0; this.scene.add(m); return m; }
-  alloc(m){ let i=m.userData.free.length?m.userData.free.pop():m.userData.top++; if(i>=m.instanceMatrix.count) i=m.instanceMatrix.count-1; m.count=Math.max(m.count,i+1); m.visible=true; return i; }
-  release(m,i){ m.setMatrixAt(i,this.zero); m.instanceMatrix.needsUpdate=true; m.userData.free.push(i); }
+  // 尸体贴在地上，投影几乎看不见，不画阴影能省一半三角形
+  mkMesh(geo,mat,cap){ const m=new THREE.InstancedMesh(geo,mat,cap); m.count=0; m.visible=false; m.frustumCulled=false; m.castShadow=false; m.receiveShadow=true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.userData.owner=[]; this.scene.add(m); return m; }
+  // 实例始终紧凑排在 0..count-1：回收时把最后一个挪进空位，只画还在的尸体
+  alloc(m,obj,key){ const i=Math.min(m.count,m.instanceMatrix.count-1); m.count=i+1; m.userData.owner[i]=[obj,key]; m.visible=true; return i; }
+  release(m,i){ const last=m.count-1, O=m.userData.owner;
+    if(i!==last){ m.getMatrixAt(last,this.m5); m.setMatrixAt(i,this.m5); O[i]=O[last]; O[i][0][O[i][1]]=i; }
+    O[last]=null; m.count=last; if(!m.count) m.visible=false; m.instanceMatrix.needsUpdate=true; }
   variant(mode,v){ const K=this.kinds[mode]||(this.kinds[mode]=[]); if(K[v]) return K[v];
     const geo=buildCorpseGeo(mode,v);
     return K[v]={shell:this.mkMesh(geo.shell,mode==='burnt'?MAT.charShell:MAT.corpseShell,this.cap),goo:geo.goo?this.mkMesh(geo.goo,MAT.goo,this.cap):null,legs:geo.legs}; }
@@ -1145,8 +1156,9 @@ class Corpses{
     if(!CORPSE_VARIANTS[mode]) mode='crushed';
     const slot=this.head%this.cap; this.head++; if(this.list[slot]) this.drop(this.list[slot]);
     const V=this.variant(mode,Math.floor(Math.random()*CORPSE_VARIANTS[mode]));
-    const c={x,z,h,sc:ROACH_L*rand(0.92,1.08),V,mode,alive:true,t:0,tw:mode==='belly'?rand(4,6.5):mode==='burnt'?1.2:rand(2.2,3.4),ph:rand(TAU),
-      si:this.alloc(V.shell),gi:V.goo?this.alloc(V.goo):-1,legs:V.legs.map(L=>{ const m=this.legs(L.style,L.i); return {L,m,i:this.alloc(m),ph:rand(TAU),f:rand(9,17)}; })};
+    const c={x,z,h,sc:ROACH_L*rand(0.92,1.08),V,mode,alive:true,t:0,tw:mode==='belly'?rand(4,6.5):mode==='burnt'?1.2:rand(2.2,3.4),ph:rand(TAU),si:-1,gi:-1,legs:[]};
+    c.si=this.alloc(V.shell,c,'si'); if(V.goo) c.gi=this.alloc(V.goo,c,'gi');
+    c.legs=V.legs.map(L=>{ const m=this.legs(L.style,L.i); const g={L,m,i:-1,ph:rand(TAU),f:rand(9,17)}; g.i=this.alloc(m,g,'i'); return g; });
     this.list[slot]=c; this.place(c); if(c.tw>0) this.twitching.add(c);
     return c;
   }

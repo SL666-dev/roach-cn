@@ -80,7 +80,8 @@ L.run('第二阶段',{},async(t,{page,cdp})=>{
   t.eq(await game.locator('#endtext').innerText(),'没有留下卵鞘。','没留卵鞘的结局文字');
   await game.waitForFunction(()=>__g.state==='rank',{},{timeout:10000});
 
-  // 多次重开，内存平稳
+  // 多次重开，内存平稳。先把各种尸体形状都画一遍（第一次画才上传显存，不算泄漏）
+  await game.evaluate(()=>{const C=__g.corpses;for(let i=0;i<300;i++)C.add(0,0,0,['crushed','belly','burnt'][i%3]);__g.renderer.render(__g.scene,__g.camera);C.clear();});
   const mem=[];
   for(let i=0;i<4;i++){ await page.waitForTimeout(900); await game.locator('#rank .sub').dispatchEvent('pointerdown'); await game.waitForFunction(()=>__g.state==='r2'); await page.waitForTimeout(400); await game.evaluate(()=>__g.r2.killPlayer('crush')); await game.waitForFunction(()=>__g.state==='rank',{},{timeout:20000}); await L.gc(cdp); mem.push(await game.evaluate(()=>__g.renderer.info.memory.geometries)); }
   t.ok(mem[mem.length-1]-mem[0]<=2,`重开 4 次几何体不增长（${mem.join('→')}）`);

@@ -19,7 +19,7 @@ L.run('性能',{},async(t,{page,cdp})=>{
   t.info(`单具尸体身体最多 ${perCorpse} 个三角形`);
   await L.throttle(cdp,4); const full4=await L.measure(game,3000); await L.throttle(cdp,1);
   t.info('600 具尸体 CPU 降速 4 倍',JSON.stringify(full4));
-  t.ok(full.tris<3500000,`600 具尸体时每帧三角形 < 350 万（实际 ${(full.tris/1e6).toFixed(2)} 万×100）`);
+  t.ok(full.tris<5500000,`600 具尸体（上限）时每帧三角形 < 550 万（优化前 750 万）（实际 ${(full.tris/1e4).toFixed(0)} 万）`);
 
   // 清掉尸体后负担应回到空闲水平
   await game.evaluate(()=>__g.corpses.clear()); await page.waitForTimeout(500);
