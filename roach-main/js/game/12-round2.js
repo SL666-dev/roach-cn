@@ -1684,11 +1684,60 @@ clearTraps(){
   watchCamera(dt){ const E=this.egg, cam=this.G.camera, A=this.ai; cam.up.set(0,1,0);
     if(!E){ this.applyCam(this.p.x,this.p.z,this.camYaw,this.camPitch,0,null); return; }
     const yaw=Math.atan2(A.x-E.x,A.z-E.z); this.watchYaw=angleDamp(this.watchYaw===undefined?yaw:this.watchYaw,yaw,2.2,dt);
-    // 알집 뒤 0.5m에 두되, 가구·문 속이면 거리를 줄이고, 그래도 없으면 옆으로 돌려 빈자리를 찾는다. 자리가 바뀔 때 튀지 않게 부드럽게 옮긴다.
-    let bx=clamp(E.x-Math.sin(this.watchYaw)*0.5,-1.9,1.9), bz=clamp(E.z-Math.cos(this.watchYaw)*0.5,-2.9,2.9), found=false;
-    for(const off of [0,0.5,-0.5,1,-1,1.6,-1.6,Math.PI]){ const a=this.watchYaw+off; for(let back=0.5;back>=0.14;back-=0.06){ const tx=clamp(E.x-Math.sin(a)*back,-1.9,1.9), tz=clamp(E.z-Math.cos(a)*back,-2.9,2.9); let ok=true; for(const o of OBST){ if(!o.roach&&inObst(o,tx,tz,0.03)){ ok=false; break; } } if(ok){ bx=tx; bz=tz; found=true; break; } } if(found) break; }
-    if(!this.watchCam||this.watchCamT!==this.egg){ this.watchCam=new THREE.Vector3(bx,0.25,bz); this.watchCamT=this.egg; } else this.watchCam.lerp(this.tmp3.set(bx,0.25,bz),1-Math.exp(-5*dt));
-    if(!found) this.tmp3.set(bx,0.75,bz), this.watchCam.copy(this.tmp3);   // 침대 뒤 틈처럼 둘 데가 전혀 없으면 위에서 내려다본다
-    cam.position.copy(this.watchCam); this.tmp.set(E.x*0.62+A.x*0.38,0.16,E.z*0.62+A.z*0.38); cam.lookAt(this.tmp); }
+    // 卵鞘在坐垫底下时，从哪个方向都看不见，像玩家躲进去时一样把坐垫调成半透明
+    const underCushion=!!(E.spot&&E.spot.cushion), c=this.cushion, op=underCushion?0.35:1;
+    if(c.material.opacity!==op){ c.material.opacity=op; c.material.transparent=op<1; c.material.needsUpdate=true; }
+    const fresh=!this.watchCam||this.watchCamT!==E;
+    this.watchPickT=(this.watchPickT||0)-dt;
+    if(fresh||this.watchPickT<=0){ this.watchPickT=0.25; this.watchGoal=this.pickWatchCam(E,this.watchYaw,underCushion); }
+    const G=this.watchGoal;
+    if(fresh){ this.watchCam=G.pos.clone(); this.watchW=G.w; this.watchCamT=E; } else { const k=1-Math.exp(-5*dt); this.watchCam.lerp(G.pos,k); this.watchW=lerp(this.watchW,G.w,k); }
+    const w=this.watchW; this.tmp.set(E.x*(1-w)+A.x*w,0.16,E.z*(1-w)+A.z*w);   // 看卵鞘和人类之间（w 是人类那一侧的比重）
+    cam.position.copy(this.watchCam); cam.lookAt(this.tmp); }
+  // 观战镜头站位：在卵鞘四周按方向、距离、高度挑候选，要求看得到卵鞘、眼前没有贴脸的墙或家具；
+  // 优先站在“卵鞘背后、朝着人类”的方向，离远一点、高一点。卵鞘在冰箱底下这类缝里时会选贴地的低机位。
+  watchBlockers(){
+    if(this._watchBlockers) return this._watchBlockers;
+    const skip=new Set(); for(const g of [this.grp,this.G.r1.grp]) g.traverse(o=>skip.add(o));
+    const out=[]; this.G.scene.traverse(o=>{ if(o.isMesh&&!o.isInstancedMesh&&!skip.has(o)&&!(o.geometry.type==='PlaneGeometry'&&Math.abs(o.rotation.x)>1)) out.push(o); });   // 地板、污渍层、天花板不算
+    return this._watchBlockers=out;
+  }
+  pickWatchCam(E,prefYaw,underCushion){
+    const ray=this.watchRay||(this.watchRay=new THREE.Raycaster()), P=new THREE.Vector3(), D=new THREE.Vector3(), eggLo=new THREE.Vector3(E.x,0.008,E.z), eggHi=new THREE.Vector3(E.x,0.03,E.z);
+    const blockers=this.watchBlockers().filter(o=>!(underCushion&&o===this.cushion));
+    const hitWithin=(from,dir,far)=>{ ray.set(from,dir); ray.near=0; ray.far=far; return ray.intersectObjects(blockers,false).some(h=>h.object.visible); };
+    const q=new THREE.Quaternion(), m=new THREE.Matrix4(), up=new THREE.Vector3(0,1,0), side=new THREE.Vector3(), upv=new THREE.Vector3();
+    const cam=this.G.camera, ty=Math.tan(cam.fov*Math.PI/360), tx=ty*cam.aspect;
+    const probe=this.watchProbe||(this.watchProbe=new THREE.PerspectiveCamera()); probe.fov=cam.fov; probe.aspect=cam.aspect; probe.near=0.01; probe.far=40; probe.updateProjectionMatrix();
+    const A=this.ai, humanP=new THREE.Vector3(A.x,0.7,A.z), ndc=new THREE.Vector3();
+    const inFrame=(pt,mx,my)=>{ ndc.copy(pt).project(probe); return ndc.z<1&&Math.abs(ndc.x)<mx&&Math.abs(ndc.y)<my; };
+    const look=new THREE.Vector3(); let best=null, bw=0.38, bs=1e9;
+    for(const h of [0.25,0.14,0.05]) for(let k=0;k<16;k++){ const off=wrapAng(k/16*TAU), a=prefYaw+off;
+      for(const back of [0.5,0.4,0.3,0.22]){
+        const x=E.x-Math.sin(a)*back, z=E.z-Math.cos(a)*back;
+        if(x<-1.9||x>1.9||z<-2.9||z>2.9) continue;
+        let inside=false; for(const o of OBST){ if(!o.roach&&h<o.h+0.02&&inObst(o,x,z,0.03)){ inside=true; break; } } if(inside) continue;
+        let score=Math.abs(off)*1.0+(0.5-back)*1.5+(h===0.25?0:h===0.14?0.35:0.7);
+        if(score-0.8>=bs) continue;   // 加上“看得到人类”的最大奖励也比不过当前最好的，就不用细算
+        P.set(x,h,z);
+        // 卵鞘必须在画面里：先按“卵鞘和人类之间”取景，放不进就把视线往卵鞘这边收
+        let w=-1; probe.position.copy(P);
+        for(const ww of [0.38,0.2,0]){ look.set(E.x*(1-ww)+this.ai.x*ww,0.16,E.z*(1-ww)+this.ai.z*ww); probe.lookAt(look); probe.updateMatrixWorld(); if(inFrame(eggLo,0.8,0.8)){ w=ww; break; } }
+        if(w<0) continue;
+        score+=(0.38-w)*1.2;
+        // 卵鞘只有 3 厘米高，底部和顶部都要看得到，免得刚好从柜子底边擦过
+        let hidden=false; for(const T of [eggLo,eggHi]){ D.copy(T).sub(P); const dist=D.length(); if(hitWithin(P,D.normalize(),dist-0.02)){ hidden=true; break; } } if(hidden) continue;
+        // 按实际视野在画面上取 3×3 个方向，眼前 0.25 米内就撞到墙或家具的超过一个，就换位置
+        m.lookAt(P,look,up); q.setFromRotationMatrix(m); side.set(1,0,0).applyQuaternion(q); upv.set(0,1,0).applyQuaternion(q); D.set(0,0,-1).applyQuaternion(q);
+        let near=0, close=0; for(const sx of [-0.8,0,0.8]) for(const sy of [-0.8,0,0.8]){ const dd=D.clone().addScaledVector(side,sx*tx).addScaledVector(upv,sy*ty).normalize(); if(hitWithin(P,dd,0.25)) near++; else if(hitWithin(P,dd,0.45)) close++; }
+        if(near>=2) continue;
+        score+=0.25*(near+close);   // 离得近的墙、柜子占画面越多越差
+        // 人类也在画面里、中间没被挡住更好
+        if(inFrame(humanP,0.9,0.95)){ D.copy(humanP).sub(P); const dist=D.length(); if(!hitWithin(P,D.normalize(),dist-0.3)) score-=0.8; }
+        if(score>=bs) continue;
+        bs=score; best=P.clone(); bw=w;
+      } }
+    return best?{pos:best,w:bw}:{pos:new THREE.Vector3(clamp(E.x,-1.9,1.9),0.75,clamp(E.z,-2.9,2.9)),w:0};   // 实在没有位置就从上方往下看卵鞘
+  }
   leaveCamera(dt){ const L=this.leaveCam; const cam=this.G.camera; cam.position.set(L.x,0.1,L.z); this.tmp.set(L.x+Math.sin(L.yaw)*1,0.1,L.z+Math.cos(L.yaw)*1); cam.lookAt(this.tmp); }
 }

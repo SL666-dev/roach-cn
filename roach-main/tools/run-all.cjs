@@ -2,7 +2,7 @@
 // 例：node tools/run-all.cjs round2   只跑名字含 round2 的脚本
 const {spawnSync}=require('node:child_process');
 const path=require('node:path');
-const ALL=['check-browser.cjs','check-pan.cjs','test-round1.cjs','test-lab.cjs','test-round2.cjs','test-layout.cjs','test-perf.cjs','test-letters.cjs'];
+const ALL=['check-browser.cjs','check-pan.cjs','test-round1.cjs','test-lab.cjs','test-round2.cjs','test-layout.cjs','test-perf.cjs','test-letters.cjs','test-watchcam.cjs'];
 const filter=process.argv[2];
 const list=ALL.filter(f=>!filter||f.includes(filter));
 const result=[];
