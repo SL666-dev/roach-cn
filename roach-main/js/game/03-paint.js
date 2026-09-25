@@ -5,16 +5,18 @@
 // ───────── 바닥 페인트 (장판 위 얼룩·시체·그을음·미끼) ─────────
 class FloorPaint{
   constructor(){
-    this.W=768; this.H=1152; this.ppm=192;
+    const s=QUALITY.paintScale; this.W=Math.round(768*s); this.H=Math.round(1152*s); this.ppm=192*s;
     this.c=document.createElement('canvas'); this.c.width=this.W; this.c.height=this.H;
     this.g=this.c.getContext('2d');
     this.tex=new THREE.CanvasTexture(this.c); this.tex.colorSpace=THREE.SRGBColorSpace; this.tex.anisotropy=4;
-    this.dirty=false; this.lastFlush=0;
+    // 手机上不生成 mipmap：俯视时贴图基本是放大显示，用不上，每次上传还要重算一遍
+    if(QUALITY.mobile){ this.tex.generateMipmaps=false; this.tex.minFilter=THREE.LinearFilter; }
+    this.dirty=false; this.lastFlush=0; this.gap=1/QUALITY.paintHz;
   }
   px(x,z){ return [(x+2)*this.ppm,(z+3)*this.ppm]; }
   clear(){ this.g.clearRect(0,0,this.W,this.H); this.dirty=true; }
-  // 텍스처 업로드는 비싸다. 얼룩이 생긴 프레임에만, 그것도 초당 10회까지만 올린다.（768×1152 一次约 3.5MB）
-  flush(t){ if(!this.dirty) return; if(t-this.lastFlush<0.1) return; this.lastFlush=t; this.tex.needsUpdate=true; this.dirty=false; }
+  // 텍스처 업로드는 비싸다. 얼룩이 생긴 프레임에만, 그것도 초당 10회（手机 5 次）까지만 올린다.（768×1152 一次约 3.5MB，手机 512×768 约 1.6MB）
+  flush(t){ if(!this.dirty) return; if(t-this.lastFlush<this.gap) return; this.lastFlush=t; this.tex.needsUpdate=true; this.dirty=false; }
   gooColors(L){
     const h=lerp(47,42,L), s=lerp(42,48,L), l=lerp(86,80,L);
     return { core:`hsl(${h},${s}%,${l}%)`, coreA:(a)=>`hsla(${h},${s}%,${l}%,${a})`, rim:`hsl(${h},${s-10}%,${l+6}%)`, goo:(a)=>`hsla(49,46%,93%,${a})`, white:(a)=>`hsla(45,30%,97%,${a})`, gut:(a)=>`hsla(24,52%,15%,${a})`, red:(a)=>`hsla(20,55%,18%,${a})` };

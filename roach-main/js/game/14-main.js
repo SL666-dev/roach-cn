@@ -6,7 +6,9 @@
 const G={time:0,state:'boot',shakeAmt:0,savedWeapons:null,savedBaits:null};
 G.canvas=document.getElementById('gl');
 G.renderer=new THREE.WebGLRenderer({canvas:G.canvas,antialias:true,powerPreference:'high-performance'});
-G.renderer.shadowMap.enabled=true; G.renderer.shadowMap.type=THREE.PCFSoftShadowMap; G.renderer.toneMapping=THREE.ACESFilmicToneMapping; G.renderer.toneMappingExposure=1.0; G.renderer.outputColorSpace=THREE.SRGBColorSpace;
+G.renderer.shadowMap.enabled=true; G.renderer.shadowMap.type=QUALITY.softShadow?THREE.PCFSoftShadowMap:THREE.PCFShadowMap;
+// 手机上阴影贴图隔帧更新（影子最多慢一帧），省掉一半阴影绘制
+G.renderer.shadowMap.autoUpdate=QUALITY.shadowEvery<=1; G.frameN=0; G.renderer.toneMapping=THREE.ACESFilmicToneMapping; G.renderer.toneMappingExposure=1.0; G.renderer.outputColorSpace=THREE.SRGBColorSpace;
 G.scene=new THREE.Scene(); G.scene.background=new THREE.Color(0xEBDFC0);
 G.camera=new THREE.PerspectiveCamera(40,1,0.01,40); G.camBase=new THREE.Vector3(); G.camRight=new THREE.Vector3(1,0,0); G.camUp=new THREE.Vector3(0,0,-1); G.camFwd=new THREE.Vector3(0,0,-1);
 // 提示文字跟着玩家最近一次实际使用的输入方式走
@@ -215,7 +217,7 @@ if(Q.get('r')==='2'){ G.savedWeapons=Q.get('w')?Q.get('w').split(','):LETHAL_ORD
 else if(Q.get('r')==='rank'){ G.savedWeapons=['hand','slipper']; G.showRank(2,false); }
 else G.startRound1();
 G.corpses.prewarm();
-window.__g=G; window.__THREE=THREE; window.__SFX=SFX; G.HOLES=HOLES;
+G.quality=QUALITY; window.__g=G; window.__THREE=THREE; window.__SFX=SFX; G.HOLES=HOLES;
 
 
 G.advance=function(T,step=1/60){
@@ -256,6 +258,7 @@ if(!G.paused){
 
   if(G.state==='r2'){ G.ui.miniT-=dt; if(G.ui.miniT<=0){ G.ui.miniT=0.1; G.ui.drawMini(G.r2.miniData()); } }
   if(G.shakeAmt>0.001){ const a=G.shakeAmt*0.02; _off.set(rand(-a,a),rand(-a,a),rand(-a,a)); G.camera.position.add(_off); G.shakeAmt*=Math.exp(-9*dt); }
+  if(QUALITY.shadowEvery>1&&G.frameN++%QUALITY.shadowEvery===0) G.renderer.shadowMap.needsUpdate=true;
   G.paint.flush(G.time); G.renderer.render(G.scene,G.camera);
 }
 frame();

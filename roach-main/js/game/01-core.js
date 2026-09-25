@@ -15,6 +15,21 @@ const angleDamp=(a,b,rate,dt)=>angleLerp(a,b,1-Math.exp(-rate*dt));
 const dist2=(ax,az,bx,bz)=>{const dx=ax-bx,dz=az-bz;return dx*dx+dz*dz;};
 const now=()=>performance.now()/1000;
 
+// ───────── 画质档位 ─────────
+// 手机档：主要指点设备是手指，且屏幕短边 ≤ 600（平板和触屏笔记本仍用电脑档）。?q=low / ?q=high 可强制。
+const QS=new URLSearchParams(window.__ROACH_SEARCH ?? location.search);
+const QUALITY=(()=>{
+  const q=QS.get('q'), coarse=!!(window.matchMedia&&matchMedia('(pointer: coarse)').matches);
+  const mobile=q==='low'?true:q==='high'?false:coarse&&Math.min(screen.width,screen.height)<=600;
+  return {
+    mobile,
+    softShadow:!mobile,            // 手机用 PCF，不用 PCFSoft
+    shadowEvery:mobile?2:1,        // 阴影贴图每几帧更新一次
+    paintScale:mobile?2/3:1,       // 地面污渍贴图分辨率
+    paintHz:mobile?5:10,           // 地面污渍贴图每秒最多上传几次
+  };
+})();
+
 // ───────── 방 ─────────
 const ROOM={x1:-2,x2:2,z1:-3,z2:3,h:2.4};
 const OBST=[
