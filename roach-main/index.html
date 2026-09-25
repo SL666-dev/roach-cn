@@ -36,6 +36,7 @@ iframe{display:block;width:100%;height:100%;border:0;background:#efe8dc}
 <style>
 #intro{position:fixed;inset:0;z-index:45;display:grid;place-items:center;padding:24px 22px calc(24px + env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 35%,#ffffff 0%,#e6f1ee 70%,#d3e6e0 100%);transition:opacity .35s}
 #intro.gone{opacity:0;pointer-events:none}
+#intro[hidden]{display:none}
 #intro .box{width:min(100%,560px);text-align:center;font:500 clamp(15.5px,4.3vw,19px)/1.8 "Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:#17372f;word-break:normal}
 #intro .tag{display:inline-block;margin-bottom:22px;padding:6px 14px;border-radius:999px;background:#0f7a63;color:#fff;font-size:13px;font-weight:800;letter-spacing:.14em}
 #intro p{margin:0 0 14px;opacity:0;transform:translateY(10px);transition:opacity .7s,transform .7s}
@@ -44,6 +45,15 @@ iframe{display:block;width:100%;height:100%;border:0;background:#efe8dc}
 #introGo{margin-top:22px;width:100%;max-width:340px;height:56px;border:0;border-radius:16px;background:#0f7a63;color:#fff;font:800 18px/1 "Noto Sans SC","PingFang SC",system-ui,sans-serif;box-shadow:0 3px 0 #0a5646,0 10px 24px rgba(15,122,99,.3);opacity:0;transition:opacity .6s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 #introGo.on{opacity:1}
 #introGo:active{transform:translateY(3px);box-shadow:0 0 0 #0a5646}
+/* 横屏手机高度不够时：可以上下滑动，并收紧字号行距，保证“开始”按钮点得到 */
+#intro{place-items:safe center;overflow-y:auto;touch-action:pan-y}
+@media (max-height:560px){
+  #intro{padding-top:14px;padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+  #intro .box{font-size:14px;line-height:1.5}
+  #intro .tag{margin-bottom:10px}
+  #intro p{margin-bottom:6px}
+  #introGo{margin-top:8px;height:44px}
+}
 
 #mail{position:fixed;inset:0;z-index:60;display:none;place-items:center;padding:20px;background:rgba(255,236,190,.5);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 #mail.show{display:grid}
@@ -238,13 +248,14 @@ const LETTER={
   ]},
 };
 const LETTER_GAP=40;                    // 편지끼리 최소 간격(초)
+const DEATH_GAP=90;                     // 死亡来信之间至少隔 90 秒
 const introEl=document.getElementById('intro');
 const introGo=document.getElementById('introGo');
 const mailEl=document.getElementById('mail');
 const mailOk=document.getElementById('mailOk');
 let introActive=false, startWhenReady=false;
 let mailOpen=false, mailDone=null, mailPausedGame=false;
-let lastLetterAt=-1e9, feedSeen=false, labLetterShown=false;
+let lastLetterAt=-1e9, lastDeathAt=-1e9, feedSeen=false, labLetterShown=false;
 let killBurst=[], deathPending=0;
 
 { // 우표 톱니
@@ -371,12 +382,12 @@ function watchKill(){
   if(deathPending||!letterFree())return;
   let go=false;
   if(!deathSeen)go=killsSinceLetter>=5&&sinceLetter()>2;
-  else if(sinceLetter()>LETTER_GAP)go=(killBurst.length>=3&&Math.random()<.4)||killsSinceLetter>=30;
+  else if(sinceLetter()>LETTER_GAP&&t-lastDeathAt>DEATH_GAP)go=(killBurst.length>=3&&Math.random()<.4)||killsSinceLetter>=30;
   if(!go)return;
   killBurst=[];
   deathPending=setTimeout(()=>{
     deathPending=0;
-    if(letterFree()&&showLetter('death')){deathSeen=true;killsSinceLetter=0;}
+    if(letterFree()&&showLetter('death')){deathSeen=true;killsSinceLetter=0;lastDeathAt=performance.now()/1000;}
   },700);
 }
 function installLetters(){
@@ -656,6 +667,8 @@ function addTweezerSlot(){
   const slot=doc.createElement('div');
   slot.id='tweezer-slot';
   slot.className='slot';
+  slot.dataset.item='tweezer';
+  slot.select=selectTweezer;
   slot.textContent='镊子';
   slot.title='镊子 (T)';
   slot.addEventListener('pointerdown',e=>{
@@ -668,6 +681,7 @@ function addTweezerSlot(){
   const hand=G.ui.slotEls.hand;
   col.insertBefore(slot,hand?.nextSibling||col.firstChild);
   G.ui.slotEls.tweezer=slot;
+  G.ui.refreshKeys?.();
 }
 
 function installTweezerMode(){
@@ -809,7 +823,9 @@ function openLab(meta={}){
   labLayer.setAttribute('aria-hidden','false');
   gameFrame.classList.add('covered');
   enterLab();
-  setTimeout(()=>{if(labOpen)showLetter('lab');},450);
+  labFrame.contentWindow?.focus();   // 键盘（F 翻面、Esc 返回）直接作用于标本室
+  // 标本室来信只在第一次夹取时出现
+  if(!labLetterShown)setTimeout(()=>{if(labOpen&&!labLetterShown&&showLetter('lab'))labLetterShown=true;},450);
 }
 
 function closeLab(){
@@ -833,6 +849,7 @@ function closeLab(){
 labBack.addEventListener('pointerdown',e=>{
   e.preventDefault();
   e.stopPropagation();
+  if(mailOpen)closeLetter();         // 来信还开着时按返回：连信一起关掉
   closeLab();
 });
 

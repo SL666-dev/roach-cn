@@ -34,6 +34,8 @@ button{font-family:inherit;color:inherit;border:0;background:none;padding:0;marg
 .slot.bait{background:var(--ivory2)}
 .slot.sel{background:var(--ink);color:var(--ivory);transform:scale(1.06);box-shadow:0 2px 0 var(--ink2),0 4px 10px rgba(80,50,20,.35)}
 .slot:active{transform:translateY(2px)}
+.slot[data-key]::after{content:attr(data-key);position:absolute;right:5px;top:3px;font-size:9px;line-height:1;font-weight:700;opacity:.45}
+@media (hover:none){ .slot[data-key]::after{display:none} }
 #kills{position:fixed;left:calc(14px + env(safe-area-inset-left));top:calc(14px + env(safe-area-inset-top));font-family:var(--serif);font-size:30px;line-height:1;color:var(--ink);text-shadow:0 1px 0 rgba(255,255,255,.5);opacity:0;transition:opacity .4s}
 #kills.show{opacity:.75}
 #kills small{font-size:15px;margin-left:3px}
@@ -75,6 +77,11 @@ button{font-family:inherit;color:inherit;border:0;background:none;padding:0;marg
 #eggbar{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);padding:7px 14px;border-radius:999px;background:rgba(20,12,6,.55);color:#F3E9CF;font-size:14px;font-weight:600;line-height:1;letter-spacing:-.01em;display:none;pointer-events:none;white-space:nowrap}
 #eggbar.show{display:block}
 #eggbar.warn{background:rgba(150,30,20,.72)}
+/* 窄屏且右上角有小地图时，卵鞘条和提示框靠左放，避开小地图 */
+@media (max-width:600px){
+  #ui.mini-on #eggbar{left:calc(12px + env(safe-area-inset-left));transform:none;max-width:calc(100vw - 124px - env(safe-area-inset-left) - env(safe-area-inset-right));white-space:normal;line-height:1.35}
+  #ui.mini-on #hint{left:calc(12px + env(safe-area-inset-left));transform:none;max-width:calc(100vw - 124px - env(safe-area-inset-left) - env(safe-area-inset-right));top:calc(80px + env(safe-area-inset-top));font-size:16px}
+}
 
 /* 2라운드 신호·안내 */
 #vig{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .5s;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 38%,rgba(0,0,0,.82) 100%)}
@@ -722,6 +729,10 @@ function makeItem(kind){
   }
   return g;
 }
+// 反复出现又消失的道具（人类出招、手里的武器、诱饵、陷阱）用完放回池里，下次直接拿来用，不再每次新建模型
+const ITEM_POOL={free:{},
+  get(kind){ const a=this.free[kind]; const m=a&&a.length?a.pop():makeItem(kind); m.userData.poolKind=kind; m.position.set(0,0,0); m.rotation.set(0,0,0); m.scale.setScalar(1); m.visible=true; return m; },
+  put(m){ if(!m) return; m.removeFromParent(); (this.free[m.userData.poolKind]||(this.free[m.userData.poolKind]=[])).push(m); }};
 
 // ───────── 蟑螂 (이질바퀴) ─────────
 // 몸 좌표: +z 头部, +y 위, x 좌우. 몸길이 약 1.2단위 = 실제 ROACH_L×1.2.
@@ -1174,11 +1185,13 @@ class Corpses{
 // ───────── 입력 ─────────
 // 第一阶段：左键使用工具，空格 + 左键或中键拖动画面；触屏仍用双指拖动。
 // 2라운드: 左侧 절반에 손가락을 대면 그 자리에 스틱이 생긴다. 손을 떼면 스틱은 기본 자리로 돌아가 흐리게 떠 있다.
+// 主要指点设备是不是手指。带触控板/触屏的笔记本 maxTouchPoints 也大于 0，不能拿它判断玩家在用什么。
+const COARSE_POINTER=window.matchMedia?matchMedia('(pointer: coarse)').matches:('ontouchstart' in window);
 class Input{
   constructor(canvas){
     this.canvas=canvas; this.keys=new Set(); this.pointers=new Map();
     this.stick={active:false,id:null,ox:0,oy:0,x:0,y:0,vx:0,vy:0};
-    this.mouse={x:innerWidth/2,y:innerHeight/2,live:false}; this.lastType='touch'; this.look={dx:0,dy:0}; this.lookId=null; this.lookOn=false;
+    this.mouse={x:innerWidth/2,y:innerHeight/2,live:false}; this.lastType=COARSE_POINTER?'touch':'mouse'; this.look={dx:0,dy:0}; this.lookId=null; this.lookOn=false;
     this._mode='boot'; this.onPress=null; this.onDrag=null; this.onRelease=null; this.onCancel=null; this.onPan=null; this.onAny=null; this.onKey=null;
     this.dashReq=false; this.eggHold=false;
     this.touchCap=('ontouchstart' in window)||navigator.maxTouchPoints>0;
@@ -1717,7 +1730,7 @@ class Round1{
   flipCushion(x,z){ const f=this.cushionF; if(f.flipped) return; let dx=CUSHION.x-x, dz=CUSHION.z-z; const d=Math.hypot(dx,dz); if(d<0.05){ dx=this.G.camUp.x; dz=this.G.camUp.z; } else { dx/=d; dz/=d; } f.flipped=true; f.t=0; f.dx=dx; f.dz=dz; SFX.cushionFlip(); this.G.shake(0.2);
     for(const r of this.roaches){ if(r.state==='dead'||r.gone) continue; if(dist2(r.x,r.z,CUSHION.x,CUSHION.z)<CUSHION.r*CUSHION.r){ r.startle={t:rand(0.15,0.55),ax:CUSHION.x,az:CUSHION.z}; } } }
   updateCushion(dt){ const f=this.cushionF, c=this.G.room.cushion; if(!f.flipped&&f.k<=0) return; f.t+=dt; let k; if(f.flipped){ k=Math.min(1,f.t/0.35); if(f.t>4.2){ f.flipped=false; f.t=0; } } else { k=Math.max(0,1-f.t/0.35); } f.k=k; const e=k<0.5?2*k*k:1-Math.pow(-2*k+2,2)/2; c.position.set(CUSHION.x+f.dx*0.5*e,0.022+Math.sin(e*Math.PI)*0.22,CUSHION.z+f.dz*0.5*e); c.quaternion.setFromAxisAngle(new THREE.Vector3(f.dz,0,-f.dx).normalize(),e*Math.PI); }
-  stop(){ this.active=false; document.getElementById('r1ui').style.display='none'; this.stopHold(); this.clearStrikes(); this.resetCushion(); for(const r of this.roaches) this.grp.remove(r.m.g); this.roaches.length=0; this.clearNymphs(); this.clearOothecae(); for(const b of this.baitMeshes) this.grp.remove(b); this.baitMeshes.length=0; this.baits.length=0; for(const k in this.itemMeshes) this.itemMeshes[k].visible=false; this.puffs.clear(); this.splat.hideAll(); this.G.ui.setKills(null); }
+  stop(){ this.active=false; document.getElementById('r1ui').style.display='none'; this.stopHold(); this.clearStrikes(); this.resetCushion(); for(const r of this.roaches) this.grp.remove(r.m.g); this.roaches.length=0; this.clearNymphs(); this.clearOothecae(); for(const b of this.baitMeshes) ITEM_POOL.put(b); this.baitMeshes.length=0; this.baits.length=0; for(const k in this.itemMeshes) this.itemMeshes[k].visible=false; this.puffs.clear(); this.splat.hideAll(); this.G.ui.setKills(null); }
   selectItem(k){ if(this.hold) this.stopHold(); this.item=k; this.G.ui.selectSlot(k); this.touch(); }
   level(){ return clamp(this.kills/80,0,1); }
   touch(){ this.lastAction=this.time; }
@@ -1766,13 +1779,8 @@ class Round1{
   removeOotheca(o){
     const i=this.oothecae.indexOf(o);
     if(i>=0) this.oothecae.splice(i,1);
+    // 卵鞘的形状和材质是所有卵鞘、活蟑螂共用的，这里只从场景里拿掉，不能释放
     this.grp.remove(o.mesh);
-    o.mesh.traverse(m=>{
-      if(!m.isMesh) return;
-      if(m.geometry) m.geometry.dispose();
-      if(Array.isArray(m.material)) m.material.forEach(x=>x&&x.dispose&&x.dispose());
-      else if(m.material&&m.material.dispose) m.material.dispose();
-    });
   }
   clearOothecae(){
     for(const o of [...this.oothecae]) this.removeOotheca(o);
@@ -1993,7 +2001,7 @@ class Round1{
     { const dx=x-CUSHION.x, dz=z-CUSHION.z, d=Math.hypot(dx,dz); if(d<CUSHION.r+0.06){ const k=(CUSHION.r+0.06)/Math.max(d,0.01); x=CUSHION.x+(d<0.01?0:dx*k); z=CUSHION.z+(d<0.01?CUSHION.r+0.06:dz*k); } }
     const b={kind,x,z,amount:it.amount,radius:it.radius,spread:it.spread,t:0}; this.baits.push(b); this.boost+=it.boost;
     this.G.paint.bait(kind,x,z);
-    if(kind!=='cola'){ const m=makeItem(kind); m.position.set(x,0,z); m.rotation.y=rand(TAU); this.grp.add(m); this.baitMeshes.push(m); b.mesh=m; }
+    if(kind!=='cola'){ const m=ITEM_POOL.get(kind); m.position.set(x,0,z); m.rotation.y=rand(TAU); this.grp.add(m); this.baitMeshes.push(m); b.mesh=m; }
   }
   inCone(q,x,z,h,len,ang){ const dx=q.x-x, dz=q.z-z; const d=Math.hypot(dx,dz); if(d>len||d<0.001) return d<0.001; const a=Math.atan2(dx,dz); return Math.abs(wrapAng(a-h))<ang*(1-0.35*d/len); }
   update(dt){
@@ -2125,7 +2133,7 @@ class Round1{
     }
 
 
-    for(let i=this.baits.length-1;i>=0;i--){ const b=this.baits[i]; b.t+=dt; if(b.amount<=0){ if(b.mesh){ this.grp.remove(b.mesh); this.baitMeshes.splice(this.baitMeshes.indexOf(b.mesh),1);} this.baits.splice(i,1); for(const q of this.roaches) if(q.bait===b){ q.bait=null; if(q.state==='feed'){ q.state='wander'; q.t=0.1; } } } }
+    for(let i=this.baits.length-1;i>=0;i--){ const b=this.baits[i]; b.t+=dt; if(b.amount<=0){ if(b.mesh){ ITEM_POOL.put(b.mesh); this.baitMeshes.splice(this.baitMeshes.indexOf(b.mesh),1);} this.baits.splice(i,1); for(const q of this.roaches) if(q.bait===b){ q.bait=null; if(q.state==='feed'){ q.state='wander'; q.t=0.1; } } } }
     this.boost=Math.max(0,this.boost-dt*1.2);
     let vis=0, alive=0; for(const r of this.roaches){ if(r.state==='dead'||r.gone) continue; alive++; if(this.inView(r.x,r.z,0.15)){ vis++; r.offT=0; } else if(!this.inView(r.x,r.z,0.6)&&r.state!=='feed'){ r.offT+=dt; if(r.offT>3) r.remove=true; } }
     const target=Math.min(24,12+this.time/60*4+this.boost*0.5);
@@ -2238,9 +2246,14 @@ const HINTS={
   watch:
     '卵鞘还在。',
 
+  ripe:
+    '卵鞘已成熟。就算你死了，下一代也会从这里出生。',
+
   trap:(b)=>`这是人类放下的${b}诱饵。停留太久会中毒身亡。`,
 
   gen:(n)=>`第 ${n} 代`,
+
+  weapon:(w)=>w==='hand'?'人类会徒手拍打':`人类手持：${LABEL[w]}`,
 };
 
 
@@ -2493,7 +2506,7 @@ this.G.room.blanket.visible=true;
     // 제목 아래에 도구 이름만 보여준다.
     G.ui.genLabel(
       HINTS.gen(this.gen+1),
-      LABEL[w]
+      HINTS.weapon(w)
     );
 
     this.setupHuman();
@@ -2505,7 +2518,7 @@ this.G.room.blanket.visible=true;
 
      G.ui.eggBar(
       G.isTouch
-        ? `形成卵鞘需 2 秒 · 孵化需 ${this.eggT} 秒`
+        ? `按住「产卵」2 秒 · 孵化需 ${this.eggT} 秒`
         : `按住 E 键 2 秒 · 孵化需 ${this.eggT} 秒`,
       false
     );
@@ -2563,8 +2576,7 @@ this.G.room.blanket.visible=true;
     const A=this.ai={state:'sleep',wake:0,stirred:false,autoWake:rand(7,10),genT:0,t:0,x:BEDSIDE.x,z:BEDSIDE.z,h:Math.PI,spd:0,path:null,wp:0,target:null,prey:null,lastSeen:null,searched:{},searchHole:null,weapon:w,W:HW[w],lightsOn:false,look:0,strike:null,rec:0,noiseT:0,footPhase:0,burstT:0,burstOn:false,sitT:0,spdMul:SPD_MUL[Math.min(this.gen,SPD_MUL.length-1)],windupAdd:this.gen<2?0.2:this.gen<4?0.12:0.05,aimErr:0.16*Math.max(0.35,1-this.gen*0.12),repathT:0,eggKnown:false,awake:false,nozzle:null};
     H.root.visible=true; H.root.position.set(1.45,0.47,-1.0); H.root.rotation.set(-Math.PI/2,0,0); H.hips.rotation.x=0; H.crouch=0; H.headPitch=0; H.headYaw=0; H.bob=0; H.strikeAnim=false; H.pose(0,0);
     this.G.room.blanket.visible=true;
-    if(this.weaponMesh){ H.hold.remove(this.weaponMesh); this.weaponMesh=null; } if(this.strikeMesh){ this.grp.remove(this.strikeMesh); this.strikeMesh=null; }
-    if(this.vac){ this.grp.remove(this.vac); this.grp.remove(this.vacTube); this.vac=null; this.vacTube=null; }
+    this.dropWeapon();
     // 2세대부터는 사람이 이미 깨어 있다 — 불 켜진 방에서 도구를 든 채, 알이 깬 자리에서 먼 곳에 서 있다
     if(this.gen>0){
       const P=this.p, spots=[[0.35,1.35],[-0.75,-1.05],[0.95,0.35],[0.15,-1.65],[-0.55,1.05],[0.6,-0.4]];
@@ -2576,11 +2588,15 @@ this.G.room.blanket.visible=true;
     }
   }
   giveWeapon(){
-    const w=this.ai.weapon; if(w==='hand') return; const m=makeItem(w); this.weaponMesh=m; this.human.hold.add(m);
-    if(w==='slipper'){ m.rotation.set(Math.PI/2,0,0); m.position.set(0,-0.02,0.06); } else if(w==='book'){ m.rotation.set(Math.PI/2,0,0.2); m.position.set(0,-0.1,0.05); } else if(w==='pan'){ m.rotation.set(0.3,Math.PI,0); m.position.set(0,-0.06,0.2); } else if(w==='tissue'){ m.rotation.set(Math.PI/2,0,0); m.position.set(0,-0.06,0.04); } else if(w==='spray'||w==='flame'){ m.rotation.set(Math.PI/2,0,0); m.position.set(0,-0.02,0.02); } else if(w==='vacuum'){ this.human.hold.remove(m); this.grp.add(m); this.vac=m; m.children[2].visible=false; const tube=cyl(0.02,0.02,1,M.std(0xa5a5ad)); this.grp.add(tube); this.vacTube=tube; }
+    const w=this.ai.weapon; if(w==='hand') return; const m=ITEM_POOL.get(w); this.weaponMesh=m; this.human.hold.add(m);
+    if(w==='slipper'){ m.rotation.set(Math.PI/2,0,0); m.position.set(0,-0.02,0.06); } else if(w==='book'){ m.rotation.set(Math.PI/2,0,0.2); m.position.set(0,-0.1,0.05); } else if(w==='pan'){ m.rotation.set(0.3,Math.PI,0); m.position.set(0,-0.06,0.2); } else if(w==='tissue'){ m.rotation.set(Math.PI/2,0,0); m.position.set(0,-0.06,0.04); } else if(w==='spray'||w==='flame'){ m.rotation.set(Math.PI/2,0,0); m.position.set(0,-0.02,0.02); } else if(w==='vacuum'){ this.human.hold.remove(m); this.grp.add(m); this.vac=m; m.children[2].visible=false; const tube=this.vacTubeMesh||(this.vacTubeMesh=cyl(0.02,0.02,1,M.std(0xa5a5ad))); this.grp.add(tube); this.vacTube=tube; }
+  }
+  dropWeapon(){
+    ITEM_POOL.put(this.weaponMesh); this.weaponMesh=null; ITEM_POOL.put(this.strikeMesh); this.strikeMesh=null;
+    if(this.vac){ this.grp.remove(this.vacTube); this.vac=null; this.vacTube=null; }
   }
 clearTraps(){
-  for(const t of this.traps) this.grp.remove(t.mesh);
+  for(const t of this.traps) ITEM_POOL.put(t.mesh);
   this.traps.length=0;
 }
   spawnTraps(){
@@ -2591,7 +2607,7 @@ clearTraps(){
     for(let i=0;i<n;i++){
       const kind=this.baitKinds[i%this.baitKinds.length];
       const s=pool.splice(Math.floor(rand(pool.length)),1)[0]; if(!s) break;
-      const mesh=makeItem(kind); mesh.position.set(s[0],0,s[1]); mesh.rotation.y=rand(TAU); this.grp.add(mesh);
+      const mesh=ITEM_POOL.get(kind); mesh.position.set(s[0],0,s[1]); mesh.rotation.y=rand(TAU); this.grp.add(mesh);
     
       this.traps.push({kind,x:s[0],z:s[1],mesh});
     }
@@ -2862,11 +2878,8 @@ clearTraps(){
       this.weaponMesh.visible=false;
     }
 
-    const sm=this.strikeMesh=makeItem(
-      A.weapon==='hand'
-        ? 'hand'
-        : A.weapon
-    );
+    ITEM_POOL.put(this.strikeMesh);
+    const sm=this.strikeMesh=ITEM_POOL.get(A.weapon);
 
     this.grp.add(sm);
 
@@ -3112,7 +3125,7 @@ clearTraps(){
         let hitNpc=false; for(const n of this.npcs){ if(n.hidden||n.state==='dead') continue; if(Math.hypot(n.x-S.x,n.z-S.z)<W.r+0.03){ this.killNpc(n,A.weapon); hitNpc=true; } }
         if(S.egg&&this.egg&&!this.ready&&Math.hypot(this.egg.x-S.x,this.egg.z-S.z)<W.r+0.06){ this.destroyEgg(); }
         if(nearMe&&hidOk){ this.killPlayer('crush'); } else if(!hitNpc){ SFX.thud(Math.hypot(P.x-S.x,P.z-S.z),0,A.weapon==='book'||A.weapon==='pan'?1.2:0.8); } }
-    } else { if(S.t>WU+W.rec*0.45){ A.state='hunt'; A.rec=W.rec*0.5; H.strikeAnim=false; H.armR.sh.rotation.x=0; H.armR.el.rotation.x=-0.25; this.grp.remove(sm); this.strikeMesh=null; if(this.weaponMesh) this.weaponMesh.visible=true; A.strike=null; } }
+    } else { if(S.t>WU+W.rec*0.45){ A.state='hunt'; A.rec=W.rec*0.5; H.strikeAnim=false; H.armR.sh.rotation.x=0; H.armR.el.rotation.x=-0.25; ITEM_POOL.put(sm); this.strikeMesh=null; if(this.weaponMesh) this.weaponMesh.visible=true; A.strike=null; } }
   }
   updateUse(dt){
     const A=this.ai, H=this.human, W=A.W, P=this.p; A.useT+=dt; const c=W.cone; const alive=this.phase==='play';
@@ -3243,6 +3256,11 @@ clearTraps(){
     if(k>=1){
       this.ready=true;
       SFX.eggReady();
+
+      if(this.phase==='play'&&!this.hinted.ripe){
+        this.hinted.ripe=true;
+        this.G.ui.hint(HINTS.ripe,4.8,0.2);
+      }
 
       if(this.phase!=='dying'){
         this.G.ui.eggReady(true);
@@ -3615,8 +3633,7 @@ clearTraps(){
 
   // ── 엔딩: 사람이 떠난다 ──
   beginLeave(){ const A=this.ai, H=this.human; this.phase='leave'; this.G.blackout(false); this.G.setLighting('on'); A.lightsOn=true; A.state='leave'; A.leaveT=0; A.leaveStep=0; A.done=false; A.doorShut=false; this.eggMesh.visible=false; this.ring.visible=false; this.hatchMesh.visible=false; this.hideWarn(); this.clearNpcs(); this.clearHatchNymphs(); this.clearTraps(); this.resetCushion(); this.G.ui.vignette(false); this.G.ui.tox(0); this.G.ui.eggState('none'); this.G.ui.eggBar(null); this.G.ui.hintClear(); this.G.ui.genLabel(null); this.G.ui.miniOn(false);
-    if(this.weaponMesh){ H.hold.remove(this.weaponMesh); this.weaponMesh=null; } if(this.strikeMesh){ this.grp.remove(this.strikeMesh); this.strikeMesh=null; }
-    if(this.vac){ this.grp.remove(this.vac); this.grp.remove(this.vacTube); this.vac=null; this.vacTube=null; }
+    this.dropWeapon();
     H.root.visible=true; H.root.rotation.set(0,0,0); H.hips.rotation.x=0; H.crouch=0; H.headPitch=0.2; H.strikeAnim=false; A.x=BEDSIDE.x; A.z=BEDSIDE.z; A.h=0; this.G.room.blanket.visible=true;
     this.suitcase.visible=true; this.roach.g.visible=false;
     this.leaveCam={x:0.2,z:0.6,yaw:Math.atan2(1.55-0.2,2.9-0.6)}; this.goTo(1.5,2.35);
@@ -3659,7 +3676,8 @@ clearTraps(){
        if(this.phase==='dying'){
       this.tickEgg(dt);
       this.updateDeath(dt);
-      this.deathCamera(dt);
+      // 死亡演出的最后一帧会切到观战/下一步，这时不能再把倾斜的死亡镜头写回去
+      if(this.phase==='dying') this.deathCamera(dt);
 
       // 사람과 타격 도구는 충돌 자세에 고정한다.
       this.updateNpcs(dt);
@@ -3867,7 +3885,7 @@ clearTraps(){
 
 
   // 죽은 뒤에는 알집 곁에서 사람이 다가오는 것을 지켜본다
-  watchCamera(dt){ const E=this.egg, cam=this.G.camera, A=this.ai;
+  watchCamera(dt){ const E=this.egg, cam=this.G.camera, A=this.ai; cam.up.set(0,1,0);
     if(!E){ this.applyCam(this.p.x,this.p.z,this.camYaw,this.camPitch,0,null); return; }
     const yaw=Math.atan2(A.x-E.x,A.z-E.z); this.watchYaw=angleDamp(this.watchYaw===undefined?yaw:this.watchYaw,yaw,2.2,dt);
     // 알집 뒤 0.5m에 두되, 가구·문 속이면 거리를 줄이고, 그래도 없으면 옆으로 돌려 빈자리를 찾는다. 자리가 바뀔 때 튀지 않게 부드럽게 옮긴다.
@@ -3883,7 +3901,7 @@ clearTraps(){
 class UI{
   constructor(G){ this.G=G;
     const wcol=document.getElementById('wcol'), bcol=document.getElementById('bcol'); this.slotEls={};
-    for(const k of [...SLOT_ORDER,...BAIT_SLOTS]){ const d=document.createElement('div'); d.className='slot'+(BAIT_SLOTS.includes(k)?' bait':''); d.textContent=LABEL[k]; d.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); SFX.ensure(); G.r1.selectItem(k); }); (BAIT_SLOTS.includes(k)?bcol:wcol).appendChild(d); this.slotEls[k]=d; }
+    for(const k of [...SLOT_ORDER,...BAIT_SLOTS]){ const d=document.createElement('div'); d.className='slot'+(BAIT_SLOTS.includes(k)?' bait':''); d.textContent=LABEL[k]; d.dataset.item=k; d.select=()=>G.r1.selectItem(k); d.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); SFX.ensure(); G.r1.selectItem(k); }); (BAIT_SLOTS.includes(k)?bcol:wcol).appendChild(d); this.slotEls[k]=d; }
     this.killsEl=document.getElementById('kills'); this.killsN=this.killsEl.querySelector('.n');
     this.quit=document.getElementById('quit'); this.confirm=document.getElementById('confirm');
     this.quit.addEventListener('pointerdown',e=>{ e.stopPropagation(); SFX.ensure(); this.quit.style.transition='none'; this.quit.classList.remove('show'); setTimeout(()=>{ this.quit.style.transition=''; },50); this.confirm.classList.add('show'); G.state='confirm'; });
@@ -3899,8 +3917,11 @@ class UI{
     this.rank.addEventListener('pointerdown',e=>{ if(e.target.classList.contains('allover')) return; e.stopPropagation(); if(G.state==='rank'&&G.rankT>0.8) G.restart(); });
     this.rank.querySelector('.allover').addEventListener('pointerdown',e=>{ e.stopPropagation(); if(G.rankT>0.8) G.restartAll(); });
     this.endtext=document.getElementById('endtext'); this.fade=document.getElementById('fade');
+    this.refreshKeys();
   }
   selectSlot(k){ for(const s in this.slotEls) this.slotEls[s].classList.toggle('sel',s===k); }
+  slotList(){ return [...document.querySelectorAll('#wcol .slot, #bcol .slot')]; }
+  refreshKeys(){ const keys=['1','2','3','4','5','6','7','8','9','0','-','=']; this.slotList().forEach((e,i)=>{ if(keys[i]) e.dataset.key=keys[i]; else delete e.dataset.key; }); }
   setKills(n){ if(n===null){ this.killsEl.classList.remove('show'); return; } this.killsN.textContent=n; this.killsEl.classList.toggle('show',n>0); }
   showQuit(b){ this.quit.classList.toggle('show',b&&this.G.state==='r1'); }
   eggState(mode){ const e=this.egg; if(e.dataset.mode===mode) return; const was=e.dataset.mode; e.dataset.mode=mode;
@@ -3924,7 +3945,7 @@ class UI{
   dashCool(k){ this.dash.style.setProperty('--c',clamp(k,0,1).toFixed(2)); this.dash.classList.toggle('off',k>0.02); }
   vignette(b){ document.getElementById('vig').style.opacity=b?'1':'0'; }
   tox(k){ document.getElementById('tox').style.opacity=clamp(k,0,1).toFixed(2); }
-  miniOn(b){ this.mini.classList.toggle('show',b); }
+  miniOn(b){ this.mini.classList.toggle('show',b); document.getElementById('ui').classList.toggle('mini-on',b); }
   drawMini(d){
     if(!d) return; const c=this.mctx, W=176, H=264, px=x=>(x+2)/4*W, pz=z=>(z+3)/6*H;
     c.clearRect(0,0,W,H);
@@ -3952,13 +3973,14 @@ G.renderer=new THREE.WebGLRenderer({canvas:G.canvas,antialias:true,powerPreferen
 G.renderer.shadowMap.enabled=true; G.renderer.shadowMap.type=THREE.PCFSoftShadowMap; G.renderer.toneMapping=THREE.ACESFilmicToneMapping; G.renderer.toneMappingExposure=1.0; G.renderer.outputColorSpace=THREE.SRGBColorSpace;
 G.scene=new THREE.Scene(); G.scene.background=new THREE.Color(0xEBDFC0);
 G.camera=new THREE.PerspectiveCamera(40,1,0.01,40); G.camBase=new THREE.Vector3(); G.camRight=new THREE.Vector3(1,0,0); G.camUp=new THREE.Vector3(0,0,-1); G.camFwd=new THREE.Vector3(0,0,-1);
-G.isTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+// 提示文字跟着玩家最近一次实际使用的输入方式走
+Object.defineProperty(G,'isTouch',{get:()=>G.input?G.input.lastType==='touch':COARSE_POINTER});
 G.paint=new FloorPaint();
 G.room=buildRoom(G.scene);
 G.corpses=new Corpses(G.scene);
 { const ov=new THREE.Mesh(new THREE.PlaneGeometry(4,6),new THREE.MeshStandardMaterial({map:G.paint.tex,transparent:true,roughness:0.65,metalness:0,depthWrite:false})); ov.rotation.x=-Math.PI/2; ov.position.y=0.002; ov.receiveShadow=true; ov.renderOrder=1; G.scene.add(ov); }
 // 조명 — 1라운드도 2라운드도 같은 낮이다. 다른 건 보는 높이뿐.
-const SM=G.isTouch?1024:1536;
+const SM=COARSE_POINTER?1024:1536;
 G.hemi=new THREE.HemisphereLight(0xfff6e8,0xd9a441,0.9); G.scene.add(G.hemi);
 G.sun=new THREE.DirectionalLight(0xffffff,2.4); G.sun.position.set(1.0,7,0.7); G.sun.target.position.set(0,0,0); G.scene.add(G.sun,G.sun.target);
 G.sun.castShadow=true; G.sun.shadow.mapSize.set(SM,SM); Object.assign(G.sun.shadow.camera,{left:-2.4,right:2.4,top:3.4,bottom:-3.4,near:1,far:12}); G.sun.shadow.camera.updateProjectionMatrix(); G.sun.shadow.bias=-0.0004; G.sun.shadow.normalBias=0.012;
@@ -4013,13 +4035,18 @@ G.input.onRelease=(id)=>{ if(inR1()) G.r1.release(id); };
 G.input.onCancel=()=>{ if(inR1()) G.r1.cancel(); };
 G.input.onPan=(dx,dy)=>{ if(inR1()) G.r1.pan(dx,dy); };
 G.input.onAny=()=>{ if(inR1()) G.r1.touch(); };
-const ALL_SLOTS=[...SLOT_ORDER,...BAIT_SLOTS];
+// 快捷键按屏幕上按钮的顺序分配（镊子按钮由 index.html 插在第二位），角标显示在按钮上
+const KEY_OF_CODE={Digit1:'1',Digit2:'2',Digit3:'3',Digit4:'4',Digit5:'5',Digit6:'6',Digit7:'7',Digit8:'8',Digit9:'9',Digit0:'0',Minus:'-',Equal:'='};
+const stepSlot=d=>{ const s=G.ui.slotList(); const i=s.findIndex(e=>e.classList.contains('sel')); s[((i<0?0:i)+d+s.length)%s.length].select(); };
 G.input.onKey=(code,down)=>{
-  if(inR1()){ if(down){ const n=parseInt(code.replace('Digit',''),10); if(n>=1&&n<=9) G.r1.selectItem(ALL_SLOTS[n-1]); if(code==='Digit0') G.r1.selectItem(ALL_SLOTS[9]); if(code==='Minus') G.r1.selectItem(ALL_SLOTS[10]); if(code==='Tab'){ const i=ALL_SLOTS.indexOf(G.r1.item); G.r1.selectItem(ALL_SLOTS[(i+1)%ALL_SLOTS.length]); } } }
+  if(inR1()){ if(down){ const k=KEY_OF_CODE[code]; if(k){ const el=G.ui.slotList().find(e=>e.dataset.key===k); if(el) el.select(); } if(code==='Tab') stepSlot(1); } }
   else if(G.state==='r2'){ if(code==='Space'&&down) G.input.dashReq=true; if(code==='KeyE') G.input.eggHold=down; }
 };
 window.addEventListener('keydown',e=>{ if(e.code==='Tab'&&inR1()) e.preventDefault(); });
-window.addEventListener('wheel',e=>{ if(!inR1()) return; let i=ALL_SLOTS.indexOf(G.r1.item); i=(i+(e.deltaY>0?1:-1)+ALL_SLOTS.length)%ALL_SLOTS.length; G.r1.selectItem(ALL_SLOTS[i]); },{passive:true});
+// 滚轮切工具：触控板一次轻滑会连发很多小增量，累积够一格才切，切完短暂锁住，免得一下跳过好几个
+let wheelAcc=0, wheelLast=0, wheelLock=0;
+window.addEventListener('wheel',e=>{ if(!inR1()) return; const t=performance.now(); if(t-wheelLast>300) wheelAcc=0; wheelLast=t; if(t<wheelLock) return;
+  wheelAcc+=e.deltaMode===1?e.deltaY*33:e.deltaY; if(Math.abs(wheelAcc)<50) return; stepSlot(wheelAcc>0?1:-1); wheelAcc=0; wheelLock=t+180; },{passive:true});
 // 흐름
 G.startRound1=function(){ G.state='r1'; G.r2.stop(); G.camera.fov=40; G.camera.near=0.05; G.camera.updateProjectionMatrix(); G.resize(); G.r1.start(); G.blackout(false,false); };
 

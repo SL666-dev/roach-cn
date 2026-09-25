@@ -30,6 +30,7 @@ L.run('第二阶段',{},async(t,{page,cdp})=>{
   t.ok(await game.evaluate(()=>!!__g.r2.egg||__g.r2.phase!=='play'),'按住 E 2 秒产下卵鞘');
   if(await phase(game)==='play'){
     if(!(await game.evaluate(()=>!!__g.r2.egg))) await game.evaluate(()=>{const r=__g.r2;r.p.spd=0;r.placeEgg();});
+    await game.waitForFunction(()=>!__g.ui.hintBusy,{},{timeout:20000});   // 等开局提示放完（真实游玩成熟至少要 32 秒）
     await game.evaluate(()=>{const r=__g.r2;r.egg.t=r.eggT-0.2;});
     await page.waitForTimeout(1500);
     t.ok(await game.evaluate(()=>__g.r2.ready),'卵鞘成熟');
