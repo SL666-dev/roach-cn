@@ -19,9 +19,9 @@ function corpseAntennae(B,R,M,y0,broken){
 }
 function lumpWarp(seed,amp){ return (w)=>{ const k=1+(vnoise(w.x*38+seed,w.y*38,w.z*38)-0.5)*amp; w.x*=k; w.z*=k; }; }
 function addGooBlob(B,R,x,z,rx,ry,rz,colIdx,y0=0){ const c0=GOO_RGB[colIdx%GOO_RGB.length], c1=GOO_RGB[(colIdx+2)%GOO_RGB.length], sd=R(0,99);
-  B.add(UNIT_SPH_LO,(v)=>rgbMix(c0,c1,vnoise(v.x*3+sd,v.y*3,v.z*3)),mtx(x,y0+Math.max(0.003,ry*0.55),z,0,R(0,TAU),0,rx,ry,rz),(w)=>{ const k=1+(vnoise(w.x*30+sd,w.y*30,w.z*30)-0.5)*0.34; w.x=x+(w.x-x)*k; w.z=z+(w.z-z)*k; w.y=Math.max(0.002,w.y); }); }
+  B.add(lowLod()?UNIT_SPH_XS:UNIT_SPH_LO,(v)=>rgbMix(c0,c1,vnoise(v.x*3+sd,v.y*3,v.z*3)),mtx(x,y0+Math.max(0.003,ry*0.55),z,0,R(0,TAU),0,rx,ry,rz),(w)=>{ const k=1+(vnoise(w.x*30+sd,w.y*30,w.z*30)-0.5)*0.34; w.x=x+(w.x-x)*k; w.z=z+(w.z-z)*k; w.y=Math.max(0.002,w.y); }); }
 function buildCorpseGeo(mode,v){
-  GEO_LOD=0.65; try{ return buildCorpseGeoLod(mode,v); } finally{ GEO_LOD=1; }
+  GEO_LOD=QUALITY.corpseLod; try{ return buildCorpseGeoLod(mode,v); } finally{ GEO_LOD=1; }
 }
 function buildCorpseGeoLod(mode,v){
   const R0=mulberry(v*7919+(mode==='crushed'?11:mode==='belly'?23:37)), R=(a,b)=>a+(b-a)*R0(), pick=a=>a[Math.floor(R0()*a.length)];
@@ -69,7 +69,7 @@ function buildCorpseGeoLod(mode,v){
     for(let gI=0;gI<2;gI++){ const [sx,sz]=splits[gI]; const pts=[[sx,0.03,sz+0.04]]; let x=sx, z=sz, a=burstA+R(-0.9,0.9); for(let k=0;k<6;k++){ a+=R(-1,1); x+=Math.cos(a)*R(0.04,0.08); z+=Math.sin(a)*R(0.03,0.07); pts.push([x,R(0.03,0.05),z]); }
       tubeOn(goo,pts,R(0.013,0.019),(t)=>{ const q=vnoise(t*9,gI*5,3); return q<0.4?GUT_RGB[1]:q>0.72?GUT_RGB[2]:GUT_RGB[0]; },null,3,4); }
     for(let k=0;k<Math.floor(R(4,7));k++){ const [sx,sz]=splits[k%2]; const pts=[]; let x=sx+R(-0.08,0.08), z=sz+R(-0.05,0.05), a=R(0,TAU); for(let j=0;j<5;j++){ a+=R(-1.6,1.6); x+=Math.cos(a)*0.03; z+=Math.sin(a)*0.03; pts.push([x,R(0.03,0.045),z]); } tubeOn(goo,pts,0.0035,()=>rgb(0xd8b04a),null,3,3); }
-    for(let k=0;k<Math.floor(R(10,16));k++){ const [sx,sz]=splits[k%2]; const a=R(0,TAU), rr=R(0.02,0.18); const r=R(0.008,0.016); goo.add(UNIT_SPH_S,GOO_RGB[3],mtx(sx+Math.cos(a)*rr+bdx*0.05,R(0.03,0.045),sz+Math.sin(a)*rr*0.7+bdz*0.05,0,0,0,r,r*0.8,r)); }
+    for(let k=0;k<Math.floor(R(10,16));k++){ const [sx,sz]=splits[k%2]; const a=R(0,TAU), rr=R(0.02,0.18); const r=R(0.008,0.016); goo.add(sphS(),GOO_RGB[3],mtx(sx+Math.cos(a)*rr+bdx*0.05,R(0.03,0.045),sz+Math.sin(a)*rr*0.7+bdz*0.05,0,0,0,r,r*0.8,r)); }
     // 다리: 몸에 붙은 채 사방으로 뻗고, 몇 개는 꺾여 들리고, 한두 개는 떨어져 나간다
     const lost=new Set(); if(R0()<0.7) lost.add(Math.floor(R(0,6))); if(R0()<0.3) lost.add(Math.floor(R(0,6)));
     for(let k=0;k<6;k++){ const i=k%3, s=k<3?1:-1, d=LEG_DEF[i];
@@ -95,7 +95,7 @@ function buildCorpseGeoLod(mode,v){
     addAbdomen(shell,pal,{warp:shrink,post:charPost}); addThorax(shell,pal,{warp:shrink,post:charPost}); addPronotum(shell,pal,{warp:shrink,post:charPost}); addHead(shell,pal,{warp:shrink,post:charPost}); addCerci(shell,pal,{warp:shrink,post:charPost});
     for(const s of [1,-1]) addWing(shell,pal,s,{uMax:R(0.4,0.7),tear:true,post:charPost,warp:(w)=>{ shrink(w); const e=Math.abs(w.x)/0.2; w.y+=0.04*e*e+(vnoise(w.x*30+sd,w.z*30,1)-0.5)*0.012; }});
     corpseAntennae(shell,R,null,0.03,true);
-    for(let k=0;k<Math.floor(R(2,4));k++){ const a=R(0,TAU); const r=R(0.012,0.022); goo.add(UNIT_SPH_S,rgb(0xb8894a),mtx(Math.cos(a)*0.12,0.07,R(-0.3,0.1),0,0,0,r,r*0.7,r)); gooN++; }
+    for(let k=0;k<Math.floor(R(2,4));k++){ const a=R(0,TAU); const r=R(0.012,0.022); goo.add(sphS(),rgb(0xb8894a),mtx(Math.cos(a)*0.12,0.07,R(-0.3,0.1),0,0,0,r,r*0.7,r)); gooN++; }
     for(let k=0;k<6;k++){ const i=k%3, s=k<3?1:-1, d=LEG_DEF[i];
       legs.push({i,style:'fold',x:s*0.12,y:0.03,z:d.z*0.93,ry:legYaw(i,s,R(-0.5,0.3)),rz:R(0.85,1.1),rx:R(-0.25,0.25),tw:R(0.3,0.6)}); }
   }
@@ -117,7 +117,9 @@ class Corpses{
   variant(mode,v){ const K=this.kinds[mode]||(this.kinds[mode]=[]); if(K[v]) return K[v];
     const geo=buildCorpseGeo(mode,v);
     return K[v]={shell:this.mkMesh(geo.shell,mode==='burnt'?MAT.charShell:MAT.corpseShell,this.cap),goo:geo.goo?this.mkMesh(geo.goo,MAT.goo,this.cap):null,legs:geo.legs}; }
-  legs(style,i){ const k=style+i; if(this.legMesh[k]) return this.legMesh[k]; return this.legMesh[k]=this.mkMesh(legWholeGeo(i,...CORPSE_LEG_KNEE[style]),style==='fold'?MAT.charLimb:MAT.corpseLimb,this.cap*2); }
+  legs(style,i){ const k=style+i; if(this.legMesh[k]) return this.legMesh[k];
+    let geo; GEO_LOD=QUALITY.corpseLod; try{ geo=legWholeGeo(i,...CORPSE_LEG_KNEE[style]); } finally{ GEO_LOD=1; }
+    return this.legMesh[k]=this.mkMesh(geo,style==='fold'?MAT.charLimb:MAT.corpseLimb,this.cap*2); }
   // 첫 시체가 나올 때마다 모양을 만들면 순간 끊긴다. 게임을 시작하면 틈틈이 하나씩 미리 만들어 둔다.
   prewarm(){ const jobs=[]; for(const mode in CORPSE_VARIANTS) for(let v=0;v<CORPSE_VARIANTS[mode];v++) jobs.push(()=>this.variant(mode,v));
     for(const st of ['splayP','splayN','curl','fold']) for(let i=0;i<3;i++) jobs.push(()=>this.legs(st,i));

@@ -27,6 +27,7 @@ const QUALITY=(()=>{
     shadowEvery:mobile?2:1,        // 阴影贴图每几帧更新一次
     paintScale:mobile?2/3:1,       // 地面污渍贴图分辨率
     paintHz:mobile?5:10,           // 地面污渍贴图每秒最多上传几次
+    corpseLod:mobile?0.4:0.65,     // 尸体网格细分系数（尸体俯视下只有几十像素宽）
   };
 })();
 

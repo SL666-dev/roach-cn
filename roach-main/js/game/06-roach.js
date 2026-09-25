@@ -66,6 +66,10 @@ const UNIT_SPH=new THREE.SphereGeometry(1,12,9);
 const UNIT_SPH_LO=new THREE.SphereGeometry(1,8,6);   // 尸体上的内脏团
 const UNIT_SPH_S=new THREE.SphereGeometry(1,9,7);
 const UNIT_CONE=new THREE.ConeGeometry(1,1,4);
+const UNIT_SPH_XS=new THREE.SphereGeometry(1,6,4);
+// 手机档尸体（GEO_LOD<0.5）的球改用低一档的网格
+const lowLod=()=>GEO_LOD<0.5;
+const sphM=()=>lowLod()?UNIT_SPH_LO:UNIT_SPH, sphS=()=>lowLod()?UNIT_SPH_XS:UNIT_SPH_S;
 // +x 방향으로 뻗은 가늘어지는 원통 (다리·수염·꼬리털)
 function limbGeo(len,r0,r1,flat=1,radial=6,segs=3){ const g=new THREE.CylinderGeometry(r1,r0,len,radial,segs,true); g.rotateZ(-Math.PI/2); g.translate(len/2,0,0); if(flat!==1) g.scale(1,flat,1); return g; }
 
@@ -90,9 +94,9 @@ function palRGB(pal){ if(_palRGB.has(pal)) return _palRGB.get(pal); const o={}; 
 
 // 前胸背板 — 실험실 표본과 같은 방패 모양. 头部 쪽은 반원, 배 쪽은 완만한 D자, 가장자리는 얇게 들린다.
 const _proGeo=new Map();
-function pronotumGeo(pal){
-  if(_proGeo.has(pal)) return _proGeo.get(pal);
-  const C=palRGB(pal).pro, N=32,K=7,W=.78,LF=.66,LR=.43,PW=3.3; const pos=[],col=[],idx=[];
+function pronotumGeo(pal,low=false){
+  const key=low?pal.pro:pal; if(_proGeo.has(key)) return _proGeo.get(key);
+  const C=palRGB(pal).pro, N=low?20:32,K=low?4:7,W=.78,LF=.66,LR=.43,PW=3.3; const pos=[],col=[],idx=[];
   const edge=a=>{ const sx=Math.sin(a),cz=Math.cos(a); const r=cz>=0?1/Math.sqrt((sx/W)**2+(cz/LF)**2):1/Math.pow(Math.pow(Math.abs(sx)/W,PW)+Math.pow(Math.abs(cz)/LR,PW),1/PW); return [sx*r,cz*r]; };
   const topY=(u,a)=>{ const f=Math.max(0,Math.cos(a)),H=lerp(.13,lerp(.1,.16,(Math.cos(a)+1)/2),sstep(0,.55,u)); return .012+H*Math.pow(Math.max(0,1-u*u),.78)+.016*sstep(.74,.93,u)*(1-sstep(.93,1,u))-.08*f*u*u; };
   const botY=(u,a)=>{ const f=Math.max(0,Math.cos(a)); return -.008+.05*Math.max(0,1-u*u)-.08*f*u*u; };
@@ -105,7 +109,7 @@ function pronotumGeo(pal){
     for(let k=1;k<K;k++) for(let j=0;j<N;j++){ const a=ring(base,k,j),b=ring(base,k+1,j),cc=ring(base,k+1,j+1),d=ring(base,k,j+1); flip?idx.push(a,cc,b,a,d,cc):idx.push(a,b,cc,a,cc,d); } }
   for(let j=0;j<N;j++){ const t0=ring(0,K,j),t1=ring(0,K,j+1),b0=ring(B,K,j),b1=ring(B,K,j+1); idx.push(t0,b0,b1,t0,b1,t1); }
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(col,3)); g.setIndex(idx);
-  _proGeo.set(pal,g); return g;
+  _proGeo.set(key,g); return g;
 }
 // 몸 조각들. o: {M, warp, post, ...}
 // 网格细分系数：活蟑螂用 1；尸体在俯视下只有几十像素，生成尸体时临时调低
@@ -113,20 +117,20 @@ let GEO_LOD=1;
 function addPronotum(B,pal,o={}){
   // 옆과 앞 가장자리는 가슴을 덮으며 아래로 휜다
   const droop=(w,i)=>{ const lx=w.x/0.195, lz=(w.z-0.30)/0.165; w.y-=0.03*lx*lx+0.022*Math.max(0,lz)*Math.max(0,lz); if(o.warp) o.warp(w,i); };
-  B.add(pronotumGeo(pal),null,mtx(0,0.104,0.30,0.1,0,0,0.25,0.2,0.25),droop,o.M,o.post); }
+  B.add(pronotumGeo(pal,lowLod()),null,mtx(0,0.104,0.30,0.1,0,0,0.25,0.2,0.25),droop,o.M,o.post); }
 function addHead(B,pal,o={}){
   const C=palRGB(pal);
-  B.add(UNIT_SPH,(v)=>rgbMix(C.head,C.face,sstep(0.1,0.9,v.z*0.7-v.y*0.5)),mtx(0,0.04,0.405,0.6,0,0,0.078,0.052,0.058),o.warp,o.M,o.post);
-  for(const s of [1,-1]) B.add(UNIT_SPH_S,C.eye,mtx(s*0.054,0.052,0.418,0.2,0,s*0.35,0.018,0.034,0.026),o.warp,o.M,o.post);
-  B.add(UNIT_SPH_S,C.mouth,mtx(0,0.008,0.452,0,0,0,0.03,0.018,0.02),o.warp,o.M,o.post);
+  B.add(sphM(),(v)=>rgbMix(C.head,C.face,sstep(0.1,0.9,v.z*0.7-v.y*0.5)),mtx(0,0.04,0.405,0.6,0,0,0.078,0.052,0.058),o.warp,o.M,o.post);
+  for(const s of [1,-1]) B.add(sphS(),C.eye,mtx(s*0.054,0.052,0.418,0.2,0,s*0.35,0.018,0.034,0.026),o.warp,o.M,o.post);
+  B.add(sphS(),C.mouth,mtx(0,0.008,0.452,0,0,0,0.03,0.018,0.02),o.warp,o.M,o.post);
   for(const s of [1,-1]){ const g=limbGeo(0.075,0.009,0.005,1,5,2); B.add(g,C.face,mtx(s*0.028,0.012,0.445,0,-Math.PI/2+s*0.25,-0.75),o.warp,o.M,o.post); }
 }
 function addThorax(B,pal,o={}){
   const C=palRGB(pal);
-  B.add(UNIT_SPH,(v)=>rgbMix(C.thV,C.thD,sstep(-0.2,0.4,v.y)),mtx(0,0.064,0.13,0,0,0,0.15,0.042,0.18),o.warp,o.M,o.post);
+  B.add(sphM(),(v)=>rgbMix(C.thV,C.thD,sstep(-0.2,0.4,v.y)),mtx(0,0.064,0.13,0,0,0,0.15,0.042,0.18),o.warp,o.M,o.post);
   LEG_DEF.forEach((d,i)=>{ for(const s of [1,-1]){
     const ix=s*0.035, iz=d.z+[0.03,0.0,0.05][i], hx=s*0.13, hz=d.z; const cx=(ix+hx)/2, cz=(iz+hz)/2, len=Math.hypot(hx-ix,hz-iz);
-    B.add(UNIT_SPH_S,(v)=>rgbMix(C.coxa,C.coxaRim,sstep(0.55,0.95,Math.hypot(v.x,v.z))),mtx(cx,0.028,cz,0,Math.atan2(-(hz-iz),hx-ix),0,len*0.62,0.013,0.05*(i===2?1.3:1)),o.warp,o.M,o.post); } });
+    B.add(sphS(),(v)=>rgbMix(C.coxa,C.coxaRim,sstep(0.55,0.95,Math.hypot(v.x,v.z))),mtx(cx,0.028,cz,0,Math.atan2(-(hz-iz),hx-ix),0,len*0.62,0.013,0.05*(i===2?1.3:1)),o.warp,o.M,o.post); } });
 }
 // 배: 여섯 마디 판이 겹친 납작한 몸통. v0~v1로 잘라서 만들 수 있다(짓이겨져 끊긴 배).
 function addAbdomen(B,pal,o={}){
@@ -182,10 +186,10 @@ function addSpine(B,col,bx,by,bz,dir,len,r,M){ const q=new THREE.Quaternion().se
 // 넓적다리: 납작하고 도톰하다. 배 쪽 모서리에 짧은 가시 한 줄.
 function addFemur(B,i,pal,M){
   const C=palRGB(pal), d=LEG_DEF[i], w=d.w, L=d.fl;
-  const g=limbGeo(L,0.03*w,0.02*w,0.55,7,5);
+  const lo=lowLod(), g=limbGeo(L,0.03*w,0.02*w,0.55,lo?5:7,lo?3:5);
   B.add(g,(v)=>rgbMix(C.femBase,C.fem,sstep(0.02,0.3*L,v.x)),M,(p)=>{ const t=clamp(p.x/L,0,1), k=1+0.22*Math.sin(Math.PI*Math.pow(t,0.8)); p.y*=k; p.z*=k; });
-  B.add(UNIT_SPH_S,C.joint,mtx(0.01,0,0,0,0,0,0.022*w,0.013*w,0.022*w).premultiply(M||new THREE.Matrix4()));
-  const n=[3,4,5][i];
+  B.add(sphS(),C.joint,mtx(0.01,0,0,0,0,0,0.022*w,0.013*w,0.022*w).premultiply(M||new THREE.Matrix4()));
+  const n=lo?[2,2,3][i]:[3,4,5][i];
   for(let k=0;k<n;k++){ const t=0.42+0.5*k/Math.max(1,n-1), sd=k%2?1:-1, r=0.022*w*(1-0.35*t)*1.2; const a=sd*2.3;
     const dir=V3(Math.cos(0.75),Math.sin(0.75)*Math.cos(a)*0.55,Math.sin(0.75)*Math.sin(a)).normalize();
     addSpine(B,C.spine,t*L,Math.cos(a)*r*0.5,Math.sin(a)*r,dir,0.028*w,0.0055*w,M); }
@@ -193,16 +197,16 @@ function addFemur(B,i,pal,M){
 // 종아리 + 발목마디 5개 + 爪. 종아리엔 굵은 가시가 사방으로 돋는다.
 function addTibia(B,i,pal,M){
   const C=palRGB(pal), d=LEG_DEF[i], w=d.w, L=d.tl;
-  const g=limbGeo(L,0.019*w,0.0125*w,0.72,6,4);
+  const lo=lowLod(), g=limbGeo(L,0.019*w,0.0125*w,0.72,lo?4:6,lo?2:4);
   B.add(g,(v)=>rgbMix(C.joint,C.tib,sstep(0,0.15*L,v.x)),M);
-  const n=[7,9,12][i], A=[0.75,-0.75,2.35,-2.35];
+  const n=lo?[4,5,6][i]:[7,9,12][i], A=[0.75,-0.75,2.35,-2.35];
   for(let k=0;k<n;k++){ const t=0.12+0.83*k/(n-1), a=A[k%4]+(hash3(i,k,1)-0.5)*0.4, r=lerp(0.019,0.0125,t)*w;
     const tilt=0.5+hash3(i,k,2)*0.2, dir=V3(Math.cos(tilt),Math.sin(tilt)*Math.cos(a),Math.sin(tilt)*Math.sin(a)).normalize();
     addSpine(B,C.spine,t*L,Math.cos(a)*r*0.72,Math.sin(a)*r,dir,(0.042+0.024*hash3(i,k,3))*w*(i===2?1.12:1),0.0062*w,M); }
   for(const a of [2.7,-2.7,Math.PI]){ const dir=V3(Math.cos(0.32),Math.sin(0.32)*Math.cos(a),Math.sin(0.32)*Math.sin(a)).normalize(); addSpine(B,C.spine,L*0.99,Math.cos(a)*0.01*w,Math.sin(a)*0.012*w,dir,0.05*w,0.0065*w,M); }
   // 발목마디: 종아리가 바닥을 향해 꺾인 만큼 되돌려 바닥에 눕힌다
   const tA=-(LEG_ELEV+d.knee)*0.92, seg=[0.4,0.18,0.14,0.1,0.18]; let m=new THREE.Matrix4().makeTranslation(L,0,0).multiply(mtx(0,0,0,0,0.12,tA));
-  for(let k=0;k<5;k++){ const sl=d.tar*seg[k], r0=(0.011-k*0.0008)*w, r1=r0*0.8; const sg=limbGeo(sl,r0,r1,0.8,5,1);
+  for(let k=0;k<5;k++){ const sl=d.tar*seg[k], r0=(0.011-k*0.0008)*w, r1=r0*0.8; const sg=limbGeo(sl,r0,r1,0.8,lo?4:5,1);
     const mm=m.clone(); if(M) mm.premultiply(M); B.add(sg,(v)=>rgbMix(C.tar,C.joint,sstep(sl*0.75,sl,v.x)*0.7),mm);
     m=m.multiply(new THREE.Matrix4().makeTranslation(sl,0,0)).multiply(mtx(0,0,0,0,0,-0.06)); }
   for(const s of [1,-1]){ const dir=V3(0.8,-0.45,s*0.35).normalize(); const mm=m.clone(); if(M) mm.premultiply(M); addSpine(B,C.spine,0,0,0,dir,0.022*w,0.004*w,mm); }
